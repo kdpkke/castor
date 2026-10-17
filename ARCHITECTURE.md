@@ -31,6 +31,8 @@ Scraping emits generated `StreamCandidate` contracts directly, with URLs, replay
 
 ## Topologies
 
+Android composes API and media inside an app-owned native process. An authenticated loopback adapter supplies WebView extraction and Android device discovery using the existing public contracts. API still owns device identities/control; media still owns ranking, delivery, transcoding, and subtitles. See [Android](android/README.md).
+
 | Setup | What runs where |
 | --- | --- |
 | Local CLI | Missing services run embedded, with loopback RPC endpoints. |

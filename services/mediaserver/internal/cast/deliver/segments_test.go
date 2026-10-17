@@ -8,8 +8,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -132,7 +134,7 @@ func TestAHungSegmentClientIsReleasedByTheWriteDeadline(t *testing.T) {
 		const deadline = 100 * time.Millisecond
 		srv, _ := serving(t, dir, Opening{WriteDeadline: deadline})
 		u := srv.URL()
-		u.Path = "/seg_00000.m4s"
+		u = u.ResolveReference(&url.URL{Path: "seg_00000.m4s"})
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, u.String(), nil)
 		if err != nil {
 			t.Fatal(err)
@@ -178,7 +180,7 @@ func serving(t *testing.T, dir string, o Opening) (srv *Segments, end func()) {
 
 func request(ctx context.Context, srv *Segments, method, path string) (*http.Response, error) {
 	u := srv.URL()
-	u.Path = path
+	u = u.ResolveReference(&url.URL{Path: strings.TrimPrefix(path, "/")})
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return nil, err

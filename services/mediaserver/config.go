@@ -8,11 +8,18 @@ import (
 
 // Config is the media server's sections of castor's configuration.
 type Config struct {
+	FFmpeg    FFmpegConfig     `yaml:"ffmpeg" validate:"required"`
 	Resolver  ResolverConfig   `yaml:"resolver" validate:"required"`
 	Server    ServerConfig     `yaml:"server" validate:"required"`
 	Network   NetworkConfig    `yaml:"network"`
 	Whisper   whisper.Config   `yaml:"whisper"`
 	Telemetry telemetry.Config `yaml:"telemetry"`
+}
+
+// FFmpegConfig names the installed tools; mobile packages keep them in the native library directory.
+type FFmpegConfig struct {
+	Path      string `yaml:"path" validate:"required"`
+	ProbePath string `yaml:"probe_path" validate:"required"`
 }
 
 // ResolverConfig is how found streams are ranked.
@@ -36,6 +43,7 @@ type NetworkConfig struct {
 
 func defaults() Config {
 	return Config{
+		FFmpeg:   FFmpegConfig{Path: "ffmpeg", ProbePath: "ffprobe"},
 		Resolver: ResolverConfig{Config: rank.Config{ProbeMaxConcurrency: 2}},
 		Server:   ServerConfig{Listen: ":8410"},
 	}

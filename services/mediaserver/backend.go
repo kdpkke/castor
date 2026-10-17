@@ -28,8 +28,6 @@ import (
 var formats = source.Formats{hls.Format{}, dash.Format{}}
 
 const (
-	ffmpegBinary  = "ffmpeg"
-	ffprobeBinary = "ffprobe"
 	// fetchTimeout bounds each playlist fetch and each probe.
 	fetchTimeout = 30 * time.Second
 	// readDeadline is the mid-read stall bound every fetch plan is derived with.
@@ -38,6 +36,7 @@ const (
 
 // backend is the machinery the media server casts with, bound to c.
 func (c *Config) backend() func(*mediav1.PlaybackSettings) cast.Caster {
+	ffmpegBinary, ffprobeBinary := c.FFmpeg.Path, c.FFmpeg.ProbePath
 	// One origin session for the engine, so every cast and identification share its cookies.
 	client := web.New(fetchTimeout)
 	e := &engine{
@@ -55,7 +54,7 @@ func (c *Config) backend() func(*mediav1.PlaybackSettings) cast.Caster {
 	return func(asked *mediav1.PlaybackSettings) cast.Caster {
 		return caster{
 			Ranker: rank.New(e.cfg.Resolver.Config, media.HeightCap(asked.GetMaxHeight()), func(s *source.Stream) media.Prober {
-				return e.machinery.Probes.Link(probe.Link{URL: s.URL, Headers: s.Headers, InputArgs: formats.InputArgs(s.ContentType, 0)}, fetchTimeout)
+				return candidateProbe{engine: e, stream: s, maxHeight: media.HeightCap(asked.GetMaxHeight())}
 			}),
 			engine: e,
 			asked:  asked,

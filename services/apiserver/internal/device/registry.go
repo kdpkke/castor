@@ -14,8 +14,9 @@ import (
 
 // Registry is every family this process reaches devices through, and how long each step is given.
 type Registry struct {
-	Families []Family
-	Timeout  time.Duration
+	Discovery func(context.Context) []Info
+	Families  []Family
+	Timeout   time.Duration
 }
 
 func (r Registry) family(t Type) (Family, error) {
@@ -31,6 +32,9 @@ func (r Registry) family(t Type) (Family, error) {
 func (r Registry) Discover(ctx context.Context) []Info {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
+	if r.Discovery != nil {
+		return r.Discovery(ctx)
+	}
 	found := make([][]Info, len(r.Families))
 	var wg sync.WaitGroup
 	for i, f := range r.Families {

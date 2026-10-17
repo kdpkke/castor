@@ -8,6 +8,7 @@ import (
 
 	"buf.build/go/protovalidate"
 
+	castorv1 "github.com/stupside/castor/gen/castor/v1"
 	"github.com/stupside/castor/gen/castor/v1/castorv1connect"
 	"github.com/stupside/castor/internal/transport"
 	"github.com/stupside/castor/services/apiserver/internal/cast"
@@ -17,10 +18,14 @@ import (
 
 // Backend is what the API server casts with, bound at the composition root.
 type Backend struct {
+	Discover Discovery
 	Devices  device.Registry
 	Media    *mediaclient.Client
 	Scraping cast.Resolver
 }
+
+// Discovery is a platform's device discovery when the Go network enumerator is unavailable.
+type Discovery func(context.Context) ([]*castorv1.Device, error)
 
 // Server is the API server: the public API, for UIs and integrations.
 type Server struct {
@@ -34,6 +39,9 @@ func New(b Backend, cfg CastConfig) (*Server, error) {
 	// The contract alone states what a cast may ask, so the defaults are held to it before the first cast.
 	if err := protovalidate.Validate(defaults); err != nil {
 		return nil, fmt.Errorf("cast: %w", err)
+	}
+	if b.Discover != nil {
+		b.Devices.Discovery = device.PlatformDiscovery(b.Discover)
 	}
 	devices := device.NewDirectory(b.Devices)
 	casts := cast.New(defaults, devices, b.Media, b.Scraping)

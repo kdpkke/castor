@@ -1,0 +1,73 @@
+# Castor for Android
+
+An independent Android app using Castor's existing Go API and media engine. The phone extracts the video, controls the TV, and serves or transcodes media itself. No PC, NAS, Termux, root, or remote Castor server is required.
+
+## Use
+
+1. Install the development APK on Android 9 or newer. ARM64 phones and x86-64 emulators are supported.
+2. Connect the phone and TV to the same Wi-Fi. On Android 17, allow local network access. Notifications expose the running service and its stop action.
+3. Paste a page URL or share a URL from another app. Select **Web page** for an embedded player or **Direct stream** for an MP4, HLS, or DASH URL.
+4. Tap **Find TVs**, then select a receiver. You can also enter a TV IP or its full DLNA description URL.
+5. Choose the maximum video height and tap **Cast video**. If a page requires interaction, start its video in the embedded browser while extraction is running.
+6. **Stop casting** ends the current cast. **Stop Castor**, including the notification action, shuts down the phone's engine and releases its locks.
+
+Subtitles accept `off`, `auto`, or a language code such as `en` or `it`. As on desktop, first use downloads a Whisper model, and burn-in applies to served playback. Real-time software encoding and transcription can consume substantial battery and may exceed a phone's sustained processing speed.
+
+## Architecture
+
+- `cmd/castor-android` composes the existing API and media services. Their RPCs stay authenticated and bound to loopback; only the device-facing media route is reachable on the LAN.
+- Loopback alone does not isolate Android apps. API, media, and browser RPCs require independent ephemeral bearer tokens; internal HTTP media and device-facing playback URLs use unguessable capability paths. Android FFmpeg side outputs use Unix sockets in an app-private cache directory. Anyone given a playback URL can consume that cast's media.
+- `CastorService` owns the native process, foreground notification, wake lock, and multicast lock. Casting continues when the activity is backgrounded. The native host reports cast activity, so the wake lock is held only during a cast. Service shutdown cancels the engine and browser.
+- At engine startup, Android's default trust anchors are exported to an app-private PEM file and passed to OpenSSL through `SSL_CERT_FILE`. Android's hashed certificate-directory filenames are incompatible with OpenSSL's lookup scheme. TLS certificate and hostname verification remain enabled.
+- Android WebView implements the existing `castor.scraping.v1` contract. It uses an app-private profile, captures stream requests and their replay headers, and exposes no JavaScript-to-native bridge. File/content URLs and protected-media permission requests are refused.
+- Android NSD handles Chromecast discovery. SSDP discovery uses a default-route UDP socket, avoiding Android's restricted netlink interface enumeration. Results enter the API's existing device directory; device protocols remain in Go.
+- Protobuf Java classes are generated directly from `../proto`. The Android client uses Connect's protobuf format for unary calls and framed status updates. A stream closing before an explicit `Ended` result is an error.
+- The shared HLS segment reader recognizes bounded `TIKTIKPX` PNG/gzip envelopes carrying MPEG-TS. HLS detected as PNG or without usable video dimensions is measured again through that same reader before admission; ordinary static images remain ineligible. This handles the media envelope without adding site-specific URL templates or disabling admission checks.
+
+## Build on Windows
+
+Install Android Studio, SDK platform **37.2**, build tools **37.0.0**, PowerShell 7, and Ubuntu in WSL. Android Studio's bundled JDK 25 is supported. In Ubuntu, install `build-essential`, `cmake`, `ninja-build`, `unzip`, `pkg-config`, `git`, `nasm`, `autoconf`, `automake`, `libtool`, `curl`, and `python3` using its package manager.
+
+From the repository root in PowerShell:
+
+```powershell
+git submodule update --init third_party/whisper.cpp
+.\android\scripts\build.ps1
+```
+
+The native build runs the checked-in Bash script through WSL. It downloads pinned Go and NDK toolchains and builds FFmpeg, FFprobe, x264, OpenSSL, FreeType, HarfBuzz, zimg, and the repository's pinned Whisper. Native build caches live in the Linux filesystem at `/var/tmp/castor-android-native`: extracting the Linux NDK onto case-insensitive NTFS loses distinct headers. `CASTOR_NATIVE_CACHE` may select another **case-sensitive** Linux directory. Do not use `/tmp` for a cache that must survive WSL restarts.
+
+The Gradle wrapper pins Gradle 9.8.1; the version catalog pins AGP 9.4.1 and Kotlin 2.4.21. Existing desktop dependencies and the Whisper submodule revision are retained. Generated native binaries and Gradle output are ignored by Git.
+
+After building native binaries, open `android/` in Android Studio. The development APK is at `app/build/outputs/apk/debug/app-debug.apk`. It is signed with the local Android development key and is not a Play Store release.
+
+Rerun the native builder after changing Go, protobuf, or native build sources. Gradle checks that runtime binaries and license notices are present; it does not rebuild the Go engine itself. Kotlin uses ktfmt's two-space Google style. Regenerate the Android mascot drawable with `python android/scripts/sync-logo.py` when the repository SVG changes.
+
+On Linux, run `android/scripts/build-native.sh` with Bash for `arm64-v8a` and `x86_64`, then run the Gradle wrapper from `android/`. The native builder currently targets Linux x86-64 hosts, including WSL; macOS native builds need a matching host-toolchain adaptation.
+
+## Verify
+
+The build wrapper runs JVM tests, lint, and APK assembly. Device tests use only local fixtures: a private webpage, a generated video, and a simulated DLNA renderer. No real TV or streaming site is contacted.
+
+Start an Android emulator, then run from PowerShell:
+
+```powershell
+.\android\scripts\test-device.ps1 -Serial emulator-5554
+```
+
+This waits for boot completion and checks fresh XML test results. Some Android Gradle versions can print `BUILD SUCCESSFUL` after APK installation fails; that text is insufficient evidence that device tests ran. Repeat with Android 17's 16 KB system image to exercise native loading and local-network permissions.
+
+## Compatibility and limits
+
+- DLNA uses the existing AVTransport implementation, including pinned hosts. If the initial `Play` acknowledgement times out, Castor keeps serving only when bounded AVTransport queries confirm `PLAYING` and the requested media URI; explicit refusals and cancellation still fail. Chromecast and Roku retain their upstream experimental status; real-device verification remains necessary.
+- Roku still requires the upstream developer-channel setup. This initial Android screen does not edit Roku credentials or published channel IDs.
+- The desktop TMDB catalog and configurable source templates are not part of the Android screen. Paste or share the authorized page directly.
+- WebView capture recognizes MP4/WebM/Matroska and HLS/DASH URL suffixes, plus HTML video sources. It does not duplicate every desktop Chromium capture heuristic. Extensionless endpoints, service-worker-only interception, logins, anti-bot checks, and some iframe players can need further extraction work.
+- No bundled video, site-specific sources, DRM decryption, paywall bypass, or geo-restriction circumvention is added. WebView receives no protected-media permission.
+- As on desktop, the TV must be able to reach the phone's LAN media URL. Guest-network isolation, VPN routing, or a Wi-Fi AP blocking multicast can prevent discovery or playback.
+
+## Native licensing
+
+Castor's source remains MIT licensed. The separately executed FFmpeg binaries include GPL components (`libx264`) and are built with GPLv3 enabled for their OpenSSL combination. Distribution must include their license notices and corresponding source/build instructions. Native source versions and download URLs are pinned in `scripts/build-native.sh`; provide the corresponding-source archive alongside an APK. Go and Android dependency licenses also apply.
+
+See the repository's [security policy](../SECURITY.md), [architecture](../ARCHITECTURE.md), and [contributing guide](../CONTRIBUTING.md).

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/stupside/castor/internal/transport"
 )
 
 const (
@@ -33,6 +35,7 @@ type Stream struct {
 	server   *http.Server
 	cancel   context.CancelFunc
 	spool    *Spool
+	prefix   string
 
 	done <-chan struct{} // producer fully spooled
 	// reading is closed once this server's own copy of the producer returns; nil where another writes the spool.
@@ -101,12 +104,14 @@ func listenStream(parent context.Context, o Opening, sp *Spool, done <-chan stru
 	mux.HandleFunc("GET /stream"+o.Format.Extension, func(w http.ResponseWriter, r *http.Request) {
 		s.handleStream(ctx, w, r)
 	})
-	s.server = serve(ctx, ln, mux)
+	prefix, handler := transport.SecretPath(mux)
+	s.prefix = prefix
+	s.server = serve(ctx, ln, handler)
 	return s, nil
 }
 
 func (s *Stream) URL() *url.URL {
-	return &url.URL{Scheme: "http", Host: s.listener.Addr().String(), Path: "/stream" + s.o.Format.Extension}
+	return &url.URL{Scheme: "http", Host: s.listener.Addr().String(), Path: s.prefix + "/stream" + s.o.Format.Extension}
 }
 
 // Drained is closed when producer ended and spool has all output.

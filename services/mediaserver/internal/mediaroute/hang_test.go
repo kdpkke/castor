@@ -41,11 +41,14 @@ func TestAStreamWithNothingToServeIsHeldOpenThroughTheRoute(t *testing.T) {
 	mux.Handle(Pattern, Handler(func(cast, p string) bool { return p == port }))
 	front := httptest.NewTestServer(t, mux)
 
-	resp, err := front.Client().Get(front.URL + "/media/cast/" + port + "/stream.ts")
+	resp, err := front.Client().Get(front.URL + "/media/cast/" + port + srv.URL().Path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stream status = %d, want 200", resp.StatusCode)
+	}
 	if _, err := io.ReadFull(resp.Body, make([]byte, len(first))); err != nil {
 		t.Fatal(err)
 	}

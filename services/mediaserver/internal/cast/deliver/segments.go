@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/stupside/castor/internal/transport"
 	"github.com/stupside/castor/services/mediaserver/internal/cast/container"
 )
 
@@ -27,6 +28,7 @@ type Segments struct {
 	server   *http.Server
 	root     *os.Root
 	playlist string
+	prefix   string
 
 	drained chan struct{}
 	served  atomic.Int64 // Artifacts handed over (measure of device fetch, not bytes).
@@ -89,13 +91,15 @@ func OpenSegments(ctx context.Context, o Opening, dir string, producer io.Reader
 			s.handedOver()
 		}
 	})
-	s.server = serve(ctx, ln, mux)
+	prefix, handler := transport.SecretPath(mux)
+	s.prefix = prefix
+	s.server = serve(ctx, ln, handler)
 	return s, nil
 }
 
 // URL is the media-playlist address the device should play.
 func (s *Segments) URL() *url.URL {
-	return &url.URL{Scheme: "http", Host: s.listener.Addr().String(), Path: "/" + s.o.Format.Tuning.Output}
+	return &url.URL{Scheme: "http", Host: s.listener.Addr().String(), Path: s.prefix + "/" + s.o.Format.Tuning.Output}
 }
 
 // Served returns artifacts handed over (zero = URL accepted but no bytes fetched).

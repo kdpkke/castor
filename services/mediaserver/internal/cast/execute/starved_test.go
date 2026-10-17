@@ -45,6 +45,14 @@ func TestADeviceThatEndsHavingTakenEverythingTheUnfinishedReadMadeIsStarved(t *t
 	feedOf := func(r *pull) feed { return feed{buffered: &buffered{reader: r}} }
 	madeBytes := int64(len(body))
 	d := delivery{sink: streamedSink{Stream: srv, made: func() media.Progress { return media.Progress{Position: time.Minute, Bytes: madeBytes} }}}
+	// Receiving the socket's bytes can precede the server recording its completed write.
+	deadline := time.Now().Add(time.Second)
+	for handed, _ := srv.Handed(); handed < madeBytes; handed, _ = srv.Handed() {
+		if time.Now().After(deadline) {
+			t.Fatalf("server recorded %d handed bytes, want %d", handed, madeBytes)
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	if _, _, ok := starved(feedOf(read), d); !ok {
 		t.Error("a device that took all the read had made, while the read still ran, was not starved")

@@ -80,6 +80,8 @@ castor cast player https://example.com/watch/some-video
 
 ## Installation
 
+An autonomous [Android app](android/README.md) is available as a source build. It runs the media engine on the phone; no desktop server or Termux is required.
+
 Use a native binary on your TV's network, with these tools on `PATH`:
 
 | Tool | Version | Used for |

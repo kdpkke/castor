@@ -58,7 +58,7 @@ func videoFilterArgs(video codec.Track[codec.VideoEncode]) []string {
 
 // drawtextFilter renders subtitle text bottom-centered with a translucent box.
 func drawtextFilter(textFile string) string {
-	return strings.Join([]string{
+	options := []string{
 		"drawtext=textfile=" + escapeFilterArg(textFile),
 		"reload=1",
 		"fontsize=h/24",
@@ -72,7 +72,11 @@ func drawtextFilter(textFile string) string {
 		"line_spacing=6",
 		"x=(w-text_w)/2",
 		"y=h-text_h-(h/20)",
-	}, ":")
+	}
+	if subtitleFont != "" {
+		options = append(options, "fontfile="+escapeFilterArg(subtitleFont))
+	}
+	return strings.Join(options, ":")
 }
 
 // escapeFilterArg escapes a value for ffmpeg's two parsers: the option parser splits on ':', the graph parser on ',', ';', '[' and ']', and both unescape backslashes and quotes.

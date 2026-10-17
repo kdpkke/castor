@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"sync"
 )
 
@@ -21,17 +20,17 @@ type loopback struct {
 	stopAccepting func()
 }
 
-// newLoopback listens on an ephemeral loopback port and takes the first connection as ffmpeg's.
+// newLoopback listens on a local socket and takes the first connection as ffmpeg's.
 func newLoopback() (*loopback, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, address, stop, err := listenSideOutput()
 	if err != nil {
 		return nil, fmt.Errorf("side output listener: %w", err)
 	}
 	l := &loopback{
 		// The -progress feed places burned-in cues every 0.1s, so it must not wait in Nagle's buffer.
-		url:           (&url.URL{Scheme: "tcp", Host: ln.Addr().String(), RawQuery: "tcp_nodelay=1"}).String(),
+		url:           address,
 		accepted:      make(chan struct{}),
-		stopAccepting: sync.OnceFunc(func() { _ = ln.Close() }),
+		stopAccepting: sync.OnceFunc(stop),
 	}
 	go func() {
 		defer close(l.accepted)

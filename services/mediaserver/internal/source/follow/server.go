@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/stupside/castor/internal/transport"
 )
 
 // server republishes each feed on loopback: its playlist at /name.m3u8, and every resource it lists under /name/.
@@ -27,9 +29,10 @@ func serve(feeds ...*feed) (*server, error) {
 		mux.HandleFunc("GET /"+feed.name+"/init/{id}", feed.init)
 		mux.HandleFunc("GET /"+feed.name+"/key/{id}", feed.key)
 	}
+	prefix, handler := transport.SecretPath(mux)
 	s := &server{
-		http: &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second},
-		base: &url.URL{Scheme: "http", Host: ln.Addr().String()},
+		http: &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second},
+		base: &url.URL{Scheme: "http", Host: ln.Addr().String(), Path: prefix},
 	}
 	go func() { _ = s.http.Serve(ln) }()
 	return s, nil
