@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,26 +67,32 @@ class Rpc(private val baseUrl: String, private val token: String) {
   suspend fun watch(request: MessageLite, update: suspend (WatchResponse) -> Unit) =
     withContext(Dispatchers.IO) {
       val connection = open("/castor.v1.CastService/Watch", request, true)
-      coroutineScope {
-        val cancellation =
-          launch(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            try {
-              awaitCancellation()
-            } finally {
-              connection.disconnect()
+      try {
+        coroutineScope {
+          val cancellation =
+            launch(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+              try {
+                awaitCancellation()
+              } finally {
+                connection.disconnect()
+              }
             }
+          try {
+            val input = DataInputStream(connection.inputStream)
+            while (currentCoroutineContext().isActive) {
+              val message = readWatch(input)
+              update(message)
+              if (message.hasEnded()) break
+            }
+          } finally {
+            cancellation.cancel()
+            connection.disconnect()
           }
-        try {
-          val input = DataInputStream(connection.inputStream)
-          while (currentCoroutineContext().isActive) {
-            val message = readWatch(input)
-            update(message)
-            if (message.hasEnded()) break
-          }
-        } finally {
-          cancellation.cancel()
-          connection.disconnect()
         }
+      } catch (error: java.io.IOException) {
+        // Disconnecting a cancelled blocking read can throw SocketException on Android.
+        currentCoroutineContext().ensureActive()
+        throw error
       }
     }
 
@@ -115,7 +122,7 @@ class Rpc(private val baseUrl: String, private val token: String) {
       val bytes = ByteArray(size).also { input.readFully(it) }
       if (flags == 2)
         throw java.io.IOException(
-          "Status stream ended before the cast: ${bytes.toString(Charsets.UTF_8)}",
+          "Status stream ended before the cast: ${bytes.toString(Charsets.UTF_8)}"
         )
       require(flags == 0) { "Unsupported status message flags" }
       return WatchResponse.parseFrom(bytes).also {

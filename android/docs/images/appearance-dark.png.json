@@ -1,0 +1,12 @@
+{
+  "path": "android/docs/images/appearance-dark.png",
+  "sha256": "939c178830403816056ba6dbba1fa71c1b2d203d7a5230fe0d92c004ea6c8050",
+  "width": 1080,
+  "height": 2400,
+  "versionCode": 10,
+  "origin": "android-emulator-screenshot",
+  "producer": "MainActivity with adb/UIAutomator",
+  "syntheticState": false,
+  "description": "English dark picker, Dark selected and marked default. Synthetic example.org draft; no physical TV.",
+  "sourceCapture": "theme-picker-dark.png"
+}

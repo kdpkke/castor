@@ -6,10 +6,12 @@ An independent Android app using Castor's existing Go API and media engine. The 
 
 1. Install the development APK on Android 9 or newer. ARM64 phones and x86-64 emulators are supported.
 2. Connect the phone and TV to the same Wi-Fi. On Android 17, allow local network access. Notifications expose the running service and its stop action.
-3. Paste a page URL or share a URL from another app. Select **Web page** for an embedded player or **Direct stream** for an MP4, HLS, or DASH URL.
-4. Tap **Find TVs**, then select a receiver. You can also enter a TV IP or its full DLNA description URL.
-5. Choose the maximum video height and tap **Cast video**. If a page requires interaction, start its video in the embedded browser while extraction is running.
-6. **Stop casting** ends the current cast. **Stop Castor**, including the notification action, shuts down the phone's engine and releases its locks.
+3. Tap **Paste link** or share a URL from another app. **Automatic** recognizes common video extensions; use the source menu to override it with **Web page** or **Direct stream** for extensionless endpoints.
+4. Tap **Choose your TV** to discover receivers, reuse the previous TV, or enter an address. DLNA also accepts a full description URL.
+5. Open **Playback settings** if needed. **Native quality** keeps the selected stream’s resolution; the TV may still need codec conversion, so it does not promise bit-identical video. Existing height limits and the 1080p default remain available. Then tap the fixed **Cast video** button. If a page requires interaction, start its video in the embedded player while extraction is running.
+6. **Stop casting** ends the current cast. The app-bar menu and notification expose **Stop Castor**, which shuts down the phone's engine and releases its locks.
+
+The Android interface uses a shared Liquid Glass material with **Dark** as the default appearance. Choose **Appearance** from the app-bar menu for **System**, **Light** or **Dark**; the choice is saved and applies immediately without recreating the screen or restarting the cast. **System** follows device night-mode changes, while explicit choices override them, including the system-bar foregrounds. Native sheets, inputs and controls use translucent surfaces with a specular rim; Android 12+ blurs only the scenic backplate, keeping content sharp. Android 9–11 retain the same material without the native blur effect. English is the default language; choose **App language** from the app-bar menu to switch to **Italiano** or **English**. The choice is saved and applies immediately, including after reopening the app. Changing language recreates the screen while the casting service keeps running. Only language, appearance, receiver and playback preferences are saved in private preferences; video URLs and access tokens are not saved there. Errors have collapsible, selectable details; **Copy error** always copies the entire diagnostic.
 
 Subtitles accept `off`, `auto`, or a language code such as `en` or `it`. As on desktop, first use downloads a Whisper model, and burn-in applies to served playback. Real-time software encoding and transcription can consume substantial battery and may exceed a phone's sustained processing speed.
 
@@ -65,6 +67,14 @@ This waits for boot completion and checks fresh XML test results. Some Android G
 - WebView capture recognizes MP4/WebM/Matroska and HLS/DASH URL suffixes, plus HTML video sources. It does not duplicate every desktop Chromium capture heuristic. Extensionless endpoints, service-worker-only interception, logins, anti-bot checks, and some iframe players can need further extraction work.
 - No bundled video, site-specific sources, DRM decryption, paywall bypass, or geo-restriction circumvention is added. WebView receives no protected-media permission.
 - As on desktop, the TV must be able to reach the phone's LAN media URL. Guest-network isolation, VPN routing, or a Wi-Fi AP blocking multicast can prevent discovery or playback.
+
+## Interface previews
+
+Native Android emulator captures use a synthetic example.org draft. The home
+screen defaults to Dark; appearance can follow System or remain Light/Dark.
+
+<img src="docs/images/home-dark.png" width="280" alt="Castor Android home in Dark appearance" />
+<img src="docs/images/appearance-dark.png" width="280" alt="System, Light and Dark appearance choices" />
 
 ## Native licensing
 

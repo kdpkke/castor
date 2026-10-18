@@ -2,6 +2,7 @@ package io.github.stupside.castor
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -16,13 +17,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
-import io.github.stupside.castor.theme.CastorTheme
+import io.github.stupside.castor.theme.*
+import io.github.stupside.castor.ui.main.CastOptions
 import io.github.stupside.castor.ui.main.MainScreen
 import io.github.stupside.castor.ui.main.MainScreenViewModel
 
 class MainActivity : ComponentActivity() {
+  override fun attachBaseContext(newBase: Context) {
+    super.attachBaseContext(CastOptions(newBase).localizedContext())
+  }
+
   private var service by mutableStateOf<CastorService?>(null)
   private var permissionDenied by mutableStateOf(false)
   private var bound = false
@@ -53,13 +63,22 @@ class MainActivity : ComponentActivity() {
     model = ViewModelProvider(this)[MainScreenViewModel::class.java]
     enableEdgeToEdge()
     setContent {
+      val options = remember { CastOptions(this) }
+      var theme by remember { mutableStateOf(options.theme()) }
       LaunchedEffect(service) { service?.endpoint?.collect { model.connect(it) } }
       LaunchedEffect(service) {
         service?.failure?.collect { message ->
           message?.let { model.fail(IllegalStateException(it)) }
         }
       }
-      CastorTheme {
+      CastorTheme(theme) {
+        val dark = MaterialTheme.colorScheme.background.luminance() < .2f
+        SideEffect {
+          WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+          }
+        }
         LaunchedEffect(service) {
           val current = service ?: return@LaunchedEffect
           current.stopped.collect { stopped ->
@@ -71,31 +90,43 @@ class MainActivity : ComponentActivity() {
               service = null
               model.connect(null)
               model.fail(
-                IllegalStateException(current.failure.value ?: "The casting engine stopped."),
+                IllegalStateException(current.failure.value ?: "The casting engine stopped.")
               )
             }
           }
         }
-        Surface(Modifier.fillMaxSize()) {
+        Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
           if (permissionDenied)
-            Column(
-              Modifier.safeDrawingPadding().padding(24.dp),
-              verticalArrangement = Arrangement.spacedBy(16.dp),
+            Box(
+              Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
+              contentAlignment = androidx.compose.ui.Alignment.Center,
             ) {
-              Text("Allow access to your TV", style = MaterialTheme.typography.headlineMedium)
-              Text("Castor needs local network access to discover TVs and send them video.")
-              Button(onClick = { requestPermissions() }) { Text("Allow local network") }
-              TextButton(
-                onClick = {
-                  startActivity(
-                    Intent(
-                      android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                      android.net.Uri.parse("package:$packageName"),
-                    ),
+              GlassPanel {
+                Column(
+                  Modifier.padding(24.dp),
+                  verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                  Text(
+                    stringResource(R.string.permission_title),
+                    style = MaterialTheme.typography.headlineMedium,
                   )
-                },
-              ) {
-                Text("Open app settings")
+                  Text(stringResource(R.string.permission_help))
+                  GlassButton(onClick = { requestPermissions() }, prominent = true) {
+                    Text(stringResource(R.string.allow_network))
+                  }
+                  TextButton(
+                    onClick = {
+                      startActivity(
+                        Intent(
+                          android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                          android.net.Uri.parse("package:$packageName"),
+                        )
+                      )
+                    }
+                  ) {
+                    Text(stringResource(R.string.open_settings))
+                  }
+                }
               }
             }
           else
@@ -108,6 +139,19 @@ class MainActivity : ComponentActivity() {
                 stopService(Intent(this, CastorService::class.java))
                 model.connect(null)
                 finish()
+              },
+              language = CastOptions(this).language(),
+              selectLanguage = { selected ->
+                val options = CastOptions(this)
+                if (options.language() != selected) {
+                  options.language(selected)
+                  recreate()
+                }
+              },
+              theme = theme,
+              selectTheme = { selected ->
+                options.theme(selected)
+                theme = selected
               },
             )
         }

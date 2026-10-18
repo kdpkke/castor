@@ -29,7 +29,7 @@ try {
             $tests += [int]$suite.tests
         }
     }
-    if ($tests -lt 8) { throw "Only $tests tests were reported for $Serial; a successful build alone is not a device-test pass." }
+    if ($tests -lt 23) { throw "Only $tests tests were reported for $Serial; a successful build alone is not a device-test pass." }
     Write-Output "Verified $tests device tests on $Serial."
 } finally {
     $env:ANDROID_SERIAL = $previousSerial

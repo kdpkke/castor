@@ -13,49 +13,89 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
+enum class CastPhase {
+  Preparing,
+  Ready,
+  Connecting,
+  Extracting,
+  Measuring,
+  Casting,
+  Completed,
+  Stopped,
+  Failed,
+  Unavailable,
+}
+
 data class MainScreenUiState(
   val ready: Boolean = false,
   val discovering: Boolean = false,
   val devices: List<Device> = emptyList(),
   val castId: String? = null,
+  val activeCast: Cast? = null,
   val submitting: Boolean = false,
   val status: String = "Starting the casting engine…",
   val error: String? = null,
+  val phase: CastPhase = CastPhase.Preparing,
+  val discoveryComplete: Boolean = false,
+  val stopping: Boolean = false,
 )
 
 class MainScreenViewModel : ViewModel() {
   val uiState = MutableStateFlow(MainScreenUiState())
   private var repository: DataRepository? = null
+  private var endpoint: Rpc? = null
   private var watch: Job? = null
   private var discovery: Job? = null
   private var submission: Job? = null
 
   fun connect(api: Rpc?) {
+    // Activity recreation re-emits the service's existing endpoint; its cast is still running.
+    if (api != null && api === endpoint) return
+    endpoint = api
     watch?.cancel()
     discovery?.cancel()
     submission?.cancel()
     repository = api?.let(::DataRepository)
     uiState.value =
-      if (api != null) MainScreenUiState(ready = true, status = "Ready to cast")
+      if (api != null)
+        MainScreenUiState(ready = true, status = "Ready to cast", phase = CastPhase.Ready)
       else
         uiState.value.copy(
           ready = false,
           castId = null,
+          activeCast = null,
           submitting = false,
           status = "Casting engine unavailable",
+          phase = CastPhase.Unavailable,
+          stopping = false,
         )
     val data = repository
     if (data != null)
       viewModelScope.launch {
         runCatching { data.casts().firstOrNull() }
-          .onSuccess { cast -> if (cast != null) follow(cast.id) }
+          .onSuccess { cast -> if (cast != null) follow(cast) }
           .onFailure { fail(it) }
       }
   }
 
   fun fail(error: Throwable) {
     if (error !is kotlinx.coroutines.CancellationException)
-      uiState.value = uiState.value.copy(error = error.message ?: "Casting failed")
+      uiState.value =
+        uiState.value.copy(
+          error = error.message ?: "Casting failed",
+          phase = CastPhase.Failed,
+          stopping = false,
+        )
+  }
+
+  fun dismissError() {
+    uiState.value =
+      uiState.value.copy(
+        error = null,
+        phase =
+          if (uiState.value.castId == null && uiState.value.ready) CastPhase.Ready
+          else uiState.value.phase,
+      )
   }
 
   fun discover() {
@@ -75,19 +115,48 @@ class MainScreenViewModel : ViewModel() {
       } catch (error: Exception) {
         fail(error)
       } finally {
-        uiState.value = uiState.value.copy(discovering = false)
+        uiState.value = uiState.value.copy(discovering = false, discoveryComplete = true)
       }
     }
   }
 
-  fun cast(url: String, page: Boolean, target: Target, maxHeight: String, subtitles: String) {
+  fun cast(
+    url: String,
+    page: Boolean,
+    target: Target,
+    maxHeight: String,
+    subtitles: String,
+    receiverName: String = "",
+  ) {
     if (submission?.isActive == true || uiState.value.castId != null) return
     submission = viewModelScope.launch {
       val data = repository ?: return@launch
       try {
         val request = request(url, page, target, maxHeight, subtitles)
-        uiState.value = uiState.value.copy(error = null, status = "Connecting…", submitting = true)
-        follow(data.cast(request))
+        val device =
+          uiState.value.devices.firstOrNull {
+            if (target.hasDeviceId()) it.id == target.deviceId
+            else it.address == target.pinned.address && it.type == target.pinned.type
+          }
+            ?: Device.newBuilder()
+              .apply {
+                if (target.hasPinned()) {
+                  name = receiverName.ifBlank { target.pinned.address }
+                  address = target.pinned.address
+                  type = target.pinned.type
+                } else id = target.deviceId
+              }
+              .build()
+        val pending = Cast.newBuilder().setSource(request.source).setDevice(device).build()
+        uiState.value =
+          uiState.value.copy(
+            error = null,
+            status = "Connecting…",
+            submitting = true,
+            phase = CastPhase.Connecting,
+            activeCast = pending,
+          )
+        follow(pending.toBuilder().setId(data.cast(request)).build())
       } catch (error: Exception) {
         fail(error)
       } finally {
@@ -96,18 +165,20 @@ class MainScreenViewModel : ViewModel() {
     }
   }
 
-  private fun follow(id: String) {
+  private fun follow(cast: Cast) {
     watch?.cancel()
-    uiState.value = uiState.value.copy(castId = id)
+    uiState.value =
+      uiState.value.copy(castId = cast.id, activeCast = cast, phase = phase(cast.status))
     val data = repository ?: return
     watch = viewModelScope.launch {
       try {
-        data.watch(id) { update ->
+        data.watch(cast.id) { update ->
           if (update.hasEnded()) {
             val result = update.ended
             uiState.value =
               uiState.value.copy(
                 castId = null,
+                activeCast = null,
                 status =
                   when {
                     result.hasStopped() -> "Stopped"
@@ -115,6 +186,13 @@ class MainScreenViewModel : ViewModel() {
                     else -> "Casting failed"
                   },
                 error = if (result.hasFailed()) result.failed.message else null,
+                phase =
+                  when {
+                    result.hasStopped() -> CastPhase.Stopped
+                    result.hasCompleted() -> CastPhase.Completed
+                    else -> CastPhase.Failed
+                  },
+                stopping = false,
               )
           } else {
             val status = update.status
@@ -126,7 +204,7 @@ class MainScreenViewModel : ViewModel() {
                 status.hasCasting() -> "Casting · attempt ${status.casting.attempt}"
                 else -> "Waiting for status…"
               }
-            uiState.value = uiState.value.copy(status = text)
+            uiState.value = uiState.value.copy(status = text, phase = phase(status))
           }
         }
       } catch (error: Exception) {
@@ -137,12 +215,22 @@ class MainScreenViewModel : ViewModel() {
 
   fun stop() = viewModelScope.launch {
     val id = uiState.value.castId ?: return@launch
+    if (uiState.value.stopping) return@launch
+    uiState.value = uiState.value.copy(stopping = true)
     try {
       repository?.stop(id)
     } catch (error: Exception) {
       fail(error)
     }
   }
+
+  private fun phase(status: CastStatus): CastPhase =
+    when {
+      status.hasExtracting() -> CastPhase.Extracting
+      status.hasMeasuring() -> CastPhase.Measuring
+      status.hasCasting() -> CastPhase.Casting
+      else -> CastPhase.Connecting
+    }
 
   companion object {
     internal fun request(
@@ -155,13 +243,14 @@ class MainScreenViewModel : ViewModel() {
       require(BrowserResolver.isHttp(url) && url.length <= 8192) {
         "Enter a complete HTTP or HTTPS video URL."
       }
-      val height = maxHeight.toIntOrNull()
+      val height =
+        if (maxHeight == NATIVE_QUALITY) NATIVE_HEIGHT_CEILING else maxHeight.toIntOrNull()
       require(height != null && height >= 2) {
         "Video height must be a whole number of at least 2 pixels."
       }
       require(
         target.hasDeviceId() && target.deviceId.isNotBlank() ||
-          target.hasPinned() && target.pinned.address.isNotBlank(),
+          target.hasPinned() && target.pinned.address.isNotBlank()
       ) {
         "Select a TV or enter its address."
       }

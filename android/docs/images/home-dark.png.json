@@ -1,0 +1,12 @@
+{
+  "path": "android/docs/images/home-dark.png",
+  "sha256": "b2e9131f255467ec04716d138c3dc25cfa62c3ed0afbc817a74ab0005a1ead84",
+  "width": 1080,
+  "height": 2400,
+  "versionCode": 10,
+  "origin": "android-emulator-screenshot",
+  "producer": "MainActivity with adb/UIAutomator",
+  "syntheticState": false,
+  "description": "Dark default on a light system. Synthetic example.org draft; no physical TV.",
+  "sourceCapture": "theme-phone-dark.png"
+}
