@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
-// Only the authenticated, loopback Connect Resolve RPC can ask the WebView to visit a page.
+// Authenticated RPC opens pages; captured-playlist capabilities can renew their own page.
 class BrowserServer(
   private val resolver: BrowserResolver,
   private val discovery: suspend () -> List<castor.v1.DeviceOuterClass.Device>,
@@ -21,6 +21,7 @@ class BrowserServer(
 ) : AutoCloseable {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+  private val playlists = BrowserPlaylists(resolver)
   val url = "http://127.0.0.1:${server.localPort}"
 
   init {
@@ -62,7 +63,7 @@ class BrowserServer(
       socket.getOutputStream().apply {
         write(
           "HTTP/1.1 $status Response\r\nContent-Type: $type\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
-            .toByteArray(),
+            .toByteArray()
         )
         write(bytes)
         flush()
@@ -74,6 +75,29 @@ class BrowserServer(
         "application/json",
         JSONObject().put("code", code).put("message", message).toString().toByteArray(),
       )
+    if (request.startsWith("GET /playlists/") && request.endsWith(" HTTP/1.1")) {
+      socket.soTimeout = 0
+      kotlinx.coroutines.coroutineScope {
+        val requestJob = coroutineContext[kotlinx.coroutines.Job]!!
+        val disconnected = launch(Dispatchers.IO) { if (input.read() < 0) requestJob.cancel() }
+        try {
+          val document =
+            withTimeout(50_000) {
+              playlists.read(request.substringAfter("GET ").substringBefore(" HTTP/1.1"), url)
+            }
+          if (document == null) error(404, "not_found", "Unknown playlist capability")
+          else reply(document.status, "application/vnd.apple.mpegurl", document.body.toByteArray())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+          throw cancelled
+        } catch (_: Exception) {
+          error(502, "unavailable", "The page could not renew or read the playlist")
+        } finally {
+          socket.close()
+          disconnected.cancel()
+        }
+      }
+      return
+    }
     if (
       !MessageDigest.isEqual(
         headers["authorization"].orEmpty().toByteArray(),
@@ -109,7 +133,10 @@ class BrowserServer(
             castor.v1.DeviceOuterClass.ListDevicesResponse.newBuilder()
               .addAllDevices(discovery())
               .build()
-          } else withTimeout(60_000) { resolver.resolve(ResolveRequest.parseFrom(bytes)) }
+          } else
+            withTimeout(60_000) {
+              playlists.retain(resolver.resolve(ResolveRequest.parseFrom(bytes)), url)
+            }
         reply(200, "application/proto", response.toByteArray())
       } catch (error: kotlinx.coroutines.CancellationException) {
         throw error
@@ -125,7 +152,12 @@ class BrowserServer(
   }
 
   override fun close() {
+    playlists.clear()
     server.close()
     scope.cancel()
+  }
+
+  fun playbackEnded() {
+    playlists.clear()
   }
 }

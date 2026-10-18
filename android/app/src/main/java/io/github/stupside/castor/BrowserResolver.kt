@@ -31,6 +31,7 @@ class BrowserResolver(context: Context) {
   private val userAgent = webView.settings.userAgentString
   private val candidates = ConcurrentHashMap<String, StreamCandidate>()
   @Volatile private var sourcePage = ""
+  @Volatile private var capturing = false
 
   init {
     with(webView.settings) {
@@ -69,7 +70,7 @@ class BrowserResolver(context: Context) {
     headers: Map<String, String> = emptyMap(),
     htmlVideo: Boolean = false,
   ) {
-    if (!active.value || !isHttp(url) || url.length > 8192 || candidates.size >= 1600) return
+    if (!capturing || !isHttp(url) || url.length > 8192 || candidates.size >= 1600) return
     val type =
       when (URI(url).path.orEmpty().substringAfterLast('.').lowercase()) {
         "m3u8" -> "application/vnd.apple.mpegurl"
@@ -92,66 +93,70 @@ class BrowserResolver(context: Context) {
       StreamCandidate.newBuilder().setStream(stream).setSourcePage(sourcePage).build()
   }
 
-  suspend fun resolve(request: ResolveRequest): ResolveResponse = mutex.withLock {
-    require(
-      request.urlsCount in 1..16 && request.urlsList.all { isHttp(it) && it.length <= 8192 },
-    ) {
-      "Invalid page URL"
-    }
-    val streams = mutableListOf<StreamCandidate>()
-    try {
-      for (page in request.urlsList) {
-        candidates.clear()
-        sourcePage = page
-        withContext(Dispatchers.Main) {
-          active.value = true
-          webView.loadUrl(page)
-        }
-        var firstSeen = 0L
-        val started = android.os.SystemClock.elapsedRealtime()
-        while (android.os.SystemClock.elapsedRealtime() - started < 30_000) {
-          delay(500)
+  suspend fun resolve(request: ResolveRequest, interactive: Boolean = true): ResolveResponse =
+    mutex.withLock {
+      require(
+        request.urlsCount in 1..16 && request.urlsList.all { isHttp(it) && it.length <= 8192 }
+      ) {
+        "Invalid page URL"
+      }
+      val streams = mutableListOf<StreamCandidate>()
+      try {
+        for (page in request.urlsList) {
+          candidates.clear()
+          sourcePage = page
           withContext(Dispatchers.Main) {
-            webView.evaluateJavascript(
-              """
-              JSON.stringify(Array.from(document.querySelectorAll('video,video source')).map(v => {
-                if (v.tagName === 'VIDEO') v.play().catch(() => {});
-                return v.currentSrc || v.src;
-              }).filter(Boolean))
-              """
-                .trimIndent(),
-            ) { encoded ->
-              runCatching {
-                val urls = JSONArray(JSONArray("[$encoded]").getString(0))
-                for (i in 0 until urls.length()) capture(urls.getString(i), htmlVideo = true)
+            capturing = true
+            active.value = interactive
+            webView.loadUrl(page)
+          }
+          var firstSeen = 0L
+          val started = android.os.SystemClock.elapsedRealtime()
+          while (android.os.SystemClock.elapsedRealtime() - started < 30_000) {
+            delay(500)
+            withContext(Dispatchers.Main) {
+              webView.evaluateJavascript(
+                """
+                JSON.stringify(Array.from(document.querySelectorAll('video,video source')).map(v => {
+                  if (v.tagName === 'VIDEO') v.play().catch(() => {});
+                  return v.currentSrc || v.src;
+                }).filter(Boolean))
+                """
+                  .trimIndent()
+              ) { encoded ->
+                runCatching {
+                  val urls = JSONArray(JSONArray("[$encoded]").getString(0))
+                  for (i in 0 until urls.length()) capture(urls.getString(i), htmlVideo = true)
+                }
               }
             }
+            if (candidates.isNotEmpty()) {
+              val now = android.os.SystemClock.elapsedRealtime()
+              if (firstSeen == 0L) firstSeen = now
+              if (now - firstSeen >= 3000) break
+            }
           }
-          if (candidates.isNotEmpty()) {
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (firstSeen == 0L) firstSeen = now
-            if (now - firstSeen >= 3000) break
-          }
+          streams += candidates.values
+          if (streams.isNotEmpty()) break
         }
-        streams += candidates.values
-        if (streams.isNotEmpty()) break
-      }
-      check(streams.isNotEmpty()) {
-        "No playable stream found. Start the video in the browser below, or supply its direct URL. DRM is unsupported."
-      }
-      ResolveResponse.newBuilder().addAllStreams(streams).build()
-    } finally {
-      withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
-        active.value = false
-        webView.stopLoading()
-        webView.loadUrl("about:blank")
-        candidates.clear()
+        check(streams.isNotEmpty()) {
+          "No playable stream found. Start the video in the browser below, or supply its direct URL. DRM is unsupported."
+        }
+        ResolveResponse.newBuilder().addAllStreams(streams).build()
+      } finally {
+        withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
+          active.value = false
+          capturing = false
+          webView.stopLoading()
+          webView.loadUrl("about:blank")
+          candidates.clear()
+        }
       }
     }
-  }
 
   fun close() {
     active.value = false
+    capturing = false
     (webView.parent as? android.view.ViewGroup)?.removeView(webView)
     webView.stopLoading()
     webView.destroy()

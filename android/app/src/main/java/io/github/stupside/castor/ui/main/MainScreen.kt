@@ -456,16 +456,8 @@ fun MainScreen(
         }
       }
     }
-  if (sheet == "language")
-    AppLanguagePicker(language, { sheet = null }) {
-      sheet = null
-      selectLanguage(it)
-    }
-  if (sheet == "theme")
-    AppThemePicker(theme, { sheet = null }) {
-      sheet = null
-      selectTheme(it)
-    }
+  if (sheet == "language") AppLanguagePicker(language, { sheet = null }, selectLanguage)
+  if (sheet == "theme") AppThemePicker(theme, { sheet = null }, selectTheme)
   if (sheet == "tv")
     TvPicker(state, tv, { sheet = null }, { viewModel.discover() }) { selected ->
       tvName = selected.name

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 	"testing/synctest"
+	"time"
 )
 
 func liveSpool(t *testing.T, window int64) (*Spool, *semaphore.Weighted) {
@@ -207,6 +208,68 @@ func (w *advancingResponse) Write(p []byte) (int, error) {
 		advance()
 	}
 	return n, err
+}
+
+func TestLiveHTTPOpenByteZeroRangeFollowsGrowth(t *testing.T) {
+	s, _ := liveSpool(t, 16)
+	_, _ = s.Write([]byte("0123"))
+	done := make(chan struct{})
+	stream := &Stream{spool: s, done: done}
+	recorder := &advancingResponse{ResponseRecorder: httptest.NewRecorder(), advance: func() {
+		_, _ = s.Write([]byte("4567"))
+		s.CloseWrite(nil)
+		close(done)
+	}}
+	req := httptest.NewRequest(http.MethodGet, "http://example/stream", nil)
+	req.Header.Set("Range", "bytes=0-")
+	stream.handleStream(t.Context(), recorder, req)
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Range") != "" || recorder.Header().Get("Content-Length") != "" {
+		t.Fatalf("growing response = %d, %v", recorder.Code, recorder.Header())
+	}
+	if got := recorder.Body.String(); got != "01234567" {
+		t.Fatalf("live response = %q, want bytes produced after the request too", got)
+	}
+}
+
+func TestLiveHTTPByteZeroRangeWaitsUntilProducerEnds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, _ := liveSpool(t, 16)
+		done := make(chan struct{})
+		stream, err := OpenSpooledStream(t.Context(), Opening{Listeners: newLAN(t), WriteDeadline: time.Minute}, s, done)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = stream.Close() })
+		response := get(t, stream, "bytes=0-")
+		if response.StatusCode != http.StatusOK || response.ContentLength != -1 {
+			t.Fatalf("growing response = %d, length=%d", response.StatusCode, response.ContentLength)
+		}
+		result := make(chan []byte, 1)
+		go func() {
+			body, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			result <- body
+		}()
+		for _, part := range []string{"", "0123", "4567"} {
+			if _, err := s.Write([]byte(part)); err != nil {
+				t.Fatal(err)
+			}
+			synctest.Wait()
+			select {
+			case body := <-result:
+				t.Fatalf("live response ended before its producer: %q", body)
+			default:
+			}
+		}
+		s.CloseWrite(nil)
+		close(done)
+		if body := <-result; string(body) != "01234567" {
+			t.Fatalf("live response = %q", body)
+		}
+		settled(t, stream)
+	})
 }
 
 func TestLiveHTTPAbortsWhenReaderFallsOutOfWindow(t *testing.T) {

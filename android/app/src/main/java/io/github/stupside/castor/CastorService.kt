@@ -106,6 +106,9 @@ class CastorService : Service() {
           "The APK does not contain the native engine for this device. Build its ABI first."
         }
         val builder = ProcessBuilder(executable.path).directory(filesDir)
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+          builder.command().add("--debug")
+        }
         val certificates = nativeCaBundle(cacheDir)
         builder
           .environment()
@@ -175,6 +178,7 @@ class CastorService : Service() {
 
   private fun keepAwake(active: Boolean) {
     if (closed) return
+    if (!active && casting) bridge?.playbackEnded()
     casting = active
     if (active) wake?.acquire(10 * 60 * 1000L) else if (wake?.isHeld == true) wake?.release()
   }

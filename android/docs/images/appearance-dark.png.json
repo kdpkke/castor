@@ -1,12 +1,12 @@
 {
   "path": "android/docs/images/appearance-dark.png",
-  "sha256": "939c178830403816056ba6dbba1fa71c1b2d203d7a5230fe0d92c004ea6c8050",
+  "sha256": "68998fecd04c64f782937092c30be5911449d16adf469ee46b417f93cf6bb22d",
   "width": 1080,
   "height": 2400,
-  "versionCode": 10,
+  "versionCode": 12,
   "origin": "android-emulator-screenshot",
-  "producer": "MainActivity with adb/UIAutomator",
-  "syntheticState": false,
-  "description": "English dark picker, Dark selected and marked default. Synthetic example.org draft; no physical TV.",
+  "producer": "android/app/src/androidTest/java/io/github/stupside/castor/ui/main/AppLanguageTest.kt",
+  "syntheticState": true,
+  "description": "Actual MainActivity with synthetic example.org draft, captured on Android17 /16KB; no physical TV.",
   "sourceCapture": "theme-picker-dark.png"
 }

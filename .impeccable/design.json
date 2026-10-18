@@ -922,7 +922,7 @@
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/MainScreen.kt",
-        "sha256": "9d7bc64ae2b431630e2020d8d2f470e1a1fae7617605127a56ffe514826a9bed"
+        "sha256": "f830e32f6721ed1f2d2427a3c87802d8a9bddbd65fdc2b10ceba7ea9bf73d305"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/CastingSheets.kt",
@@ -942,11 +942,11 @@
       },
       {
         "path": "android/app/src/main/res/values/strings.xml",
-        "sha256": "65f415d41de740b2543c10b9f7ad1463cac218352decbc01ebb1455b2e8b90ae"
+        "sha256": "7bf552b17baebddc23a1b0ee3eb3b045e22f78e246c859c066cbe357f42c5251"
       },
       {
         "path": "android/app/src/main/res/values-it/strings.xml",
-        "sha256": "d7f1cfe6dcadf79f897666b89bf323028d3950ab8418fb87e4b7454d4ce9e28b"
+        "sha256": "27b706606b717597e255ad734bc459c34b34b21b8ab433df7138a492ad0a5bea"
       },
       {
         "path": "android/gradle/libs.versions.toml",
@@ -958,15 +958,15 @@
       },
       {
         "path": "PRODUCT.md",
-        "sha256": "42d29991192881f814b99766eb2fa21c6c11dbb58f5e82ff61b87e45773745c7"
+        "sha256": "845bcba0cc27c4f66941e039bc0d6a5c6a68d411c23cc80ce1cb7637d7667ef3"
       },
       {
         "path": ".impeccable/surfaces/hub-stupside-castor-ui-main-mainscreen-kt-e7e7bf1a.md",
-        "sha256": "a8217a316e68f09d81c1283280d9752c20dc8357fd43b48a726e32a68397f448"
+        "sha256": "a7bb03155fad231271e4e950880b2c2607e85beec4af38e0edcded7540778bbf"
       },
       {
         "path": "android/app/src/androidTest/java/io/github/stupside/castor/ui/main/AppLanguageTest.kt",
-        "sha256": "09c7839e5a2ff5ed74fb553c4620900cb4b7411da23b25a7a7f5913c9dec4d4e"
+        "sha256": "c99c64d0def7dc5d1e3842f870a0daa5f56ba122edecd2da9687be28d6e2c654"
       },
       {
         "path": "android/app/src/main/res/drawable/ic_theme.xml",
@@ -977,7 +977,7 @@
         "sha256": "e85f2dbd34e288595d70512d04a34f4b27bdb1793dc7a9b9fec66aeb355fa3db"
       }
     ],
-    "designMdSha256": "c6ffd92ed30afa96c96fc1feee3c69c63ab54a0df738a440f78eae225ab2d48d",
+    "designMdSha256": "0b8809ab241cb8708f74863737adad41a57f5a5432b42b8bcabc273855a43bb3",
     "previewMode": "native-source-excerpts",
     "previewLimitations": "Self-contained escaped Kotlin source sections rendered in pre/code with local CSS. These are native implementation references; they do not simulate native controls in HTML or execute Compose. Use native emulator captures for appearance; dependencies and imports remain in their cited source files.",
     "tonalRampPolicy": "Generated OKLCH strips are non-normative panel visualization only, including fill color ramps shown without alpha. Actual palette and computed translucent fill colors live in DESIGN.md frontmatter; Android composition lives in Glass.kt.",
@@ -1166,7 +1166,7 @@
       "application": "MainActivity remembers the saved enum and updates Compose state immediately without Activity recreation; the draft, current model and running casting service are preserved.",
       "system": "AppTheme.System follows isSystemInDarkTheme and OS configuration changes; explicit Light and Dark override device night mode.",
       "systemBars": "Status- and navigation-bar foregrounds resolve from the effective Material background luminance in MainActivity.",
-      "presentation": "AppThemePicker reuses AppChoiceRow, selectableGroup/RadioButton semantics, 76dp minimum rows, medium glass shape, titleLarge/bodySmall, selected accent fill/checkmark, scrollable GlassSheet and Close. Selection closes immediately.",
+      "presentation": "AppThemePicker reuses AppChoiceRow, selectableGroup/RadioButton semantics, 76dp minimum rows, medium glass shape, titleLarge/bodySmall, selected accent fill/checkmark, scrollable GlassSheet and Close. Selection applies immediately and keeps the sheet open until explicit dismissal.",
       "tokens": "Existing light/dark palettes, type and glass material unchanged.",
       "evidenceFixture": "DesignEvidenceTest explicitly uses CastorTheme(AppTheme.System) and passes System to MainScreen; fixture night-mode captures do not change the production Dark default."
     },
@@ -1176,6 +1176,13 @@
       "versionCode": 11,
       "subtitlePolicy": "Saved auto follows the selected app language; explicit SubtitlePreferences prefer source captions and enable transcription only as fallback.",
       "visualEvidence": "Existing versionCode 8/10 captures remain attributed historical references for unchanged components; settings-native is recaptured by the versionCode 11 device suite."
+    },
+    "preferenceInteractions": {
+      "versionCode": 12,
+      "selection": "Language and appearance selections keep their native sheets open. Saved sheet state survives language-triggered Activity recreation; text and selected rows update immediately.",
+      "dismissal": "Close button, Android Back and native sheet gestures remain explicit user actions.",
+      "playbackSummary": "EN/IT summaries explicitly name the subtitle setting.",
+      "verification": "14 focused instrumentation tests and 10 JVM tests pass; three regressions observed failing on dev.11. Native emulator inspection covers EN/IT, retained sheets, live theme selection and 1.5x Compose text. Native runtime unchanged; full device/Go suites not rerun."
     }
   },
   "components": [

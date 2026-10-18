@@ -110,10 +110,22 @@ class CastorRuntimeTest {
   @Test fun pageWithPixelWrappedHlsIsAdmittedAndCasts() = castFixture(true)
 
   @Test
+  fun livePageRenewsExpiredPlaylistWhileThePhoneKeepsServing() = castFixture(true, renewing = true)
+
+  @Test
+  fun failedPlaylistRenewalIsAnErrorInsteadOfCompletion() =
+    castFixture(true, renewing = true, denyRenewal = true)
+
+  @Test
   fun nativeQualityKeeps1440pInsteadOfInheritingThe1080pDefault() =
     castFixture(false, nativeQuality = true)
 
-  private fun castFixture(pixels: Boolean, nativeQuality: Boolean = false) = runBlocking {
+  private fun castFixture(
+    pixels: Boolean,
+    nativeQuality: Boolean = false,
+    renewing: Boolean = false,
+    denyRenewal: Boolean = false,
+  ) = runBlocking {
     grantPermissions()
     ActivityScenario.launch(MainActivity::class.java).use { activity ->
       val bound = CompletableDeferred<CastorService>()
@@ -142,7 +154,7 @@ class CastorRuntimeTest {
           }
         val sample =
           File.createTempFile("castor-fixture", if (pixels) ".ts" else ".mp4", context.cacheDir)
-        val duration = if (pixels) 60 else if (nativeQuality) 12 else 30
+        val duration = if (renewing) 4 else if (pixels) 60 else if (nativeQuality) 12 else 30
         val command =
           listOf(
             "${context.applicationInfo.nativeLibraryDir}/libffmpeg.so",
@@ -184,9 +196,41 @@ class CastorRuntimeTest {
         val fetches = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val server = MockWebServer()
         var uri = ""
+        val tickets = java.util.concurrent.atomic.AtomicInteger()
+        val issued = java.util.concurrent.atomic.AtomicLong()
+        val blocked = java.util.concurrent.atomic.AtomicBoolean()
+        val began = android.os.SystemClock.elapsedRealtime()
         server.dispatcher =
           object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+              if (renewing && request.path == "/watch") {
+                val ticket = tickets.incrementAndGet()
+                issued.set(android.os.SystemClock.elapsedRealtime())
+                return MockResponse()
+                  .setHeader("Content-Type", "text/html")
+                  .setBody("<script>fetch('/video.m3u8?ticket=$ticket');</script>")
+              }
+              if (renewing && request.requestUrl!!.encodedPath == "/video.m3u8") {
+                if (
+                  blocked.get() ||
+                    request.requestUrl!!.queryParameter("ticket") != tickets.get().toString() ||
+                    android.os.SystemClock.elapsedRealtime() - issued.get() >= 8000
+                )
+                  return MockResponse().setResponseCode(403)
+                val first = (android.os.SystemClock.elapsedRealtime() - began) / 4000
+                return MockResponse()
+                  .setHeader("Content-Type", "application/vnd.apple.mpegurl")
+                  .setBody(
+                    "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:$first\n" +
+                      (first..first + 2).joinToString("") {
+                        "#EXT-X-DISCONTINUITY\n#EXTINF:4,\nsegment.png?n=$it\n"
+                      }
+                  )
+              }
+              if (renewing && request.requestUrl!!.encodedPath == "/segment.png")
+                return MockResponse()
+                  .setHeader("Content-Type", "image/png")
+                  .setBody(Buffer().write(wrapped!!))
               if (pixels && request.path == "/watch")
                 return MockResponse()
                   .setHeader("Content-Type", "text/html")
@@ -383,6 +427,23 @@ class CastorRuntimeTest {
               withContext(Dispatchers.IO) { continued.await(20, TimeUnit.SECONDS) },
             )
             assertNull("The playing cast ended after a missing acknowledgement", ended)
+            if (renewing) {
+              withTimeout(30_000) {
+                while (tickets.get() < 3) delay(100)
+              }
+              val before = receivedBytes.get()
+              withTimeout(15_000) { while (receivedBytes.get() <= before) delay(100) }
+              assertNull("The live cast ended after renewed access", ended)
+              if (denyRenewal) {
+                blocked.set(true)
+                withTimeout(45_000) { watcher.await() }
+                assertTrue(
+                  "Rejected renewal must fail instead of completing: $ended",
+                  ended?.hasFailed() == true,
+                )
+                assertTrue(ended!!.failed.message, ended!!.failed.message.contains("403"))
+              }
+            }
           }
           if (nativeQuality) {
             withTimeout(15_000) {
@@ -430,7 +491,7 @@ class CastorRuntimeTest {
               "The finite native-quality clip must complete: $ended",
               ended?.hasCompleted() == true,
             )
-          } else {
+          } else if (!denyRenewal) {
             if (model != null) withContext(Dispatchers.Main) { model!!.stop() } else data.stop(id)
             withTimeout(20_000) { watcher.await() }
             assertTrue(

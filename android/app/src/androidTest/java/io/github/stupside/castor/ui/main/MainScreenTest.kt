@@ -219,7 +219,7 @@ class MainScreenTest {
     compose.onNodeWithText("Done").performScrollTo().assertIsNotEnabled()
     compose.onNodeWithText("Language code, e.g. it or en").performScrollTo().performTextInput("it")
     compose.onNodeWithText("Done").performScrollTo().performClick()
-    compose.onNodeWithText("720p · IT").assertExists()
+    compose.onNodeWithText("720p · Subtitles: IT").assertExists()
     compose.runOnIdle {
       assertEquals("720", CastOptions(context).height())
       assertEquals("it", CastOptions(context).subtitles())
@@ -254,7 +254,7 @@ class MainScreenTest {
     compose.onNodeWithText("Playback settings").performScrollTo().performClick()
     compose.onNodeWithText("Native quality").performClick().assertIsSelected()
     compose.onNodeWithText("Done").performScrollTo().performClick()
-    compose.onNodeWithText("Native quality · Off").assertExists()
+    compose.onNodeWithText("Native quality · Subtitles: Off").assertExists()
     compose.runOnIdle { assertEquals("native", CastOptions(context).height()) }
     compose.onNodeWithText("Playback settings").performScrollTo().performClick()
     compose.onNodeWithText("Native quality").assertIsSelected()
@@ -262,7 +262,7 @@ class MainScreenTest {
     compose.onNodeWithText("Done").performScrollTo().assertIsNotEnabled()
     compose.onNodeWithText("1080p").performScrollTo().performClick()
     compose.onNodeWithText("Done").performScrollTo().performClick()
-    compose.onNodeWithText("1080p · Off").assertExists()
+    compose.onNodeWithText("1080p · Subtitles: Off").assertExists()
   }
 
   @Test

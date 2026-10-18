@@ -51,7 +51,7 @@
     <string name="language_code">Language code, e.g. it or en</string>
     <string name="language_invalid">Use a two- or three-letter language code.</string>
     <string name="subtitles_help">Castor uses source captions in the chosen language, or generates them with a downloaded speech model. App language follows English or Italian. Transcription can use substantial battery and requires served playback, such as DLNA.</string>
-    <string name="preferences_summary">%1$s · %2$s</string>
+    <string name="preferences_summary">%1$s · Subtitles: %2$s</string>
     <string name="done">Done</string>
     <string name="cast_video">Cast video</string>
     <string name="connecting">Connecting…</string>

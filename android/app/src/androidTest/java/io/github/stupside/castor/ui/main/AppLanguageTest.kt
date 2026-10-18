@@ -97,22 +97,26 @@ class AppLanguageTest {
       compose.onNodeWithText("Dark").assertIsSelected()
       capture("theme-picker-dark")
       compose.onNodeWithText("System").performClick()
+      compose.onNodeWithText("System").assertIsSelected()
       assertDark(false)
-      capture("theme-home-system-light")
+      capture("theme-picker-system-light")
       night("yes")
       assertDark(true)
-      openAppearance()
       compose.onNodeWithText("System").assertIsSelected()
       compose.onNodeWithText("Light").performClick()
+      compose.onNodeWithText("Light").assertIsSelected()
       assertDark(false)
       compose.activityRule.scenario.recreate()
       assertDark(false)
       assertEquals(AppTheme.Light, CastOptions(context).theme())
+      compose.onNodeWithText("Light").assertIsSelected()
+      compose.onNodeWithContentDescription("Close").performClick()
       compose.onNodeWithText("https://example.org/theme-draft").assertExists()
       openAppearance()
       compose.onNodeWithText("Light").assertIsSelected()
       capture("theme-picker-light")
       compose.onNodeWithText("Dark").performClick()
+      compose.onNodeWithText("Dark").assertIsSelected()
       assertDark(true)
       lateinit var model: MainScreenViewModel
       compose.activityRule.scenario.onActivity {
@@ -121,14 +125,21 @@ class AppLanguageTest {
         model.uiState.value =
           model.uiState.value.copy(castId = "theme-fixture", phase = CastPhase.Casting)
       }
-      openAppearance()
       compose.onNodeWithText("Light").performClick()
+      compose.onNodeWithText("Light").assertIsSelected()
+      assertDark(false)
       compose.activityRule.scenario.onActivity {
         assertSame(model, ViewModelProvider(it)[MainScreenViewModel::class.java])
         assertEquals("theme-fixture", model.uiState.value.castId)
         assertEquals(CastPhase.Casting, model.uiState.value.phase)
         assertNull(model.uiState.value.error)
       }
+      compose.onNodeWithContentDescription("Close").performClick()
+      compose.onNodeWithText("Appearance").assertDoesNotExist()
+      openAppearance()
+      compose.onNodeWithText("Light").assertIsSelected()
+      Espresso.pressBack()
+      compose.onNodeWithText("Appearance").assertDoesNotExist()
     } finally {
       night(
         when (previousNight) {
@@ -178,29 +189,52 @@ class AppLanguageTest {
       capture("language-en")
       compose.onNodeWithText("Italiano").performClick()
       compose.waitUntil(10_000) {
-        compose.onAllNodesWithText("Incolla link").fetchSemanticsNodes().isNotEmpty()
+        compose.onAllNodesWithText("Lingua dell’app").fetchSemanticsNodes().isNotEmpty()
       }
-      compose.onNodeWithText("https://example.org/shared-video").assertExists()
+      compose.onNodeWithText("Italiano").assertIsSelected()
+      compose.activityRule.scenario.onActivity {
+        assertEquals("it", it.resources.configuration.locales[0].language)
+      }
       assertEquals(AppLanguage.Italian, CastOptions(context).language())
+      capture("language-it")
       compose.activityRule.scenario.recreate()
+      compose.onNodeWithText("Italiano").assertIsSelected()
+      compose.onNodeWithText("English").performClick()
       compose.waitUntil(10_000) {
-        compose.onAllNodesWithText("Incolla link").fetchSemanticsNodes().isNotEmpty()
+        compose.onAllNodesWithText("App language").fetchSemanticsNodes().isNotEmpty()
       }
+      compose.onNodeWithText("English").assertIsSelected().performClick().assertIsSelected()
+      compose.onNodeWithText("Italiano").performClick()
+      compose.waitUntil(10_000) {
+        compose.onAllNodesWithText("Lingua dell’app").fetchSemanticsNodes().isNotEmpty()
+      }
+      compose.onNodeWithText("Italiano").assertIsSelected()
+      compose.onNodeWithContentDescription("Chiudi").performClick()
+      compose.onNodeWithText("1080p · Sottotitoli: Disattivati").assertExists()
+      capture("home-it")
       compose.onNodeWithText("https://example.org/shared-video").assertExists()
+      compose.onNodeWithContentDescription("Altre opzioni").performClick()
+      compose.onNodeWithText("Lingua dell’app").performClick()
+      compose.onNodeWithText("Italiano").assertIsSelected()
+      compose.onNodeWithText("English").performClick()
+      compose.waitUntil(10_000) {
+        compose.onAllNodesWithText("App language").fetchSemanticsNodes().isNotEmpty()
+      }
+      compose.onNodeWithText("English").assertIsSelected()
+      assertEquals(AppLanguage.English, CastOptions(context).language())
       assertSame(
         "Changing language must keep the running engine",
         endpoint,
         service!!.endpoint.value,
       )
       assertFalse(service!!.stopped.value)
-      compose.onNodeWithContentDescription("Altre opzioni").performClick()
-      compose.onNodeWithText("Lingua dell’app").performClick()
-      capture("language-it")
-      compose.onNodeWithText("English").performClick()
-      compose.waitUntil(10_000) {
-        compose.onAllNodesWithText("Paste link").fetchSemanticsNodes().isNotEmpty()
-      }
-      assertEquals(AppLanguage.English, CastOptions(context).language())
+      compose.onNodeWithContentDescription("Close").performClick()
+      compose.onNodeWithText("https://example.org/shared-video").assertExists()
+      capture("home-en")
+      compose.activityRule.scenario.recreate()
+      compose.onNodeWithText("App language").assertDoesNotExist()
+      compose.onNodeWithText("Paste link").assertExists()
+      compose.onNodeWithText("1080p · Subtitles: Off").assertExists()
     } finally {
       context.unbindService(connection)
     }

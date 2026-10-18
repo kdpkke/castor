@@ -68,3 +68,11 @@ light/dark Liquid Glass palettes. Reuse the language chooser's native radio rows
 checkmark, scrolling glass sheet and close affordance. Apply the selection without
 recreating the Activity, losing the draft or disturbing the current cast. Status
 and navigation bar foregrounds must follow the effective app theme. Localize EN/IT.
+
+## Preference interaction revision — 2026-10-18
+
+Language and appearance choices apply immediately and keep the current sheet open.
+Saved sheet state survives language-triggered Activity recreation, so another
+language can be selected without reopening the chooser. Close, Android Back and
+native dismissal remain user actions. The playback summary names subtitles
+explicitly in English and Italian instead of presenting an unexplained Off value.

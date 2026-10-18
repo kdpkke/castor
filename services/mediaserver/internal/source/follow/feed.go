@@ -26,6 +26,8 @@ type feed struct {
 	mu     sync.Mutex
 	ledger ledger
 	render []byte
+	// refused preserves an unanswered final refusal even when ffmpeg exits successfully.
+	refused error
 	// repackaging is decided once, before the first render, since a playlist cannot take back a MAP it has named.
 	repackaging *bool
 	carriage    map[timeline.Map]bool
@@ -64,12 +66,18 @@ func (f *feed) refresh(ctx context.Context) error {
 	defer cancel()
 	w, err := f.source.Window(ctx)
 	if err != nil {
+		if refusal(err) != 0 {
+			f.mu.Lock()
+			f.refused = err
+			f.mu.Unlock()
+		}
 		return err
 	}
 	if err := f.decide(ctx, w); err != nil {
 		return err
 	}
 	f.mu.Lock()
+	f.refused = nil
 	merged := f.ledger.Merge(w)
 	f.render = f.ledger.Render(f.view)
 	f.pruneResources()

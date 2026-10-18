@@ -38,7 +38,7 @@ service. No computer, NAS, root, or remote server is required during use.
 - English by default, with an immediate, saved choice of English or Italian.
   Interface language changes preserve the draft and running casting service.
 - Dark appearance by default, with saved System, Light and Dark choices.
-  Appearance changes apply immediately without recreating the screen or casting service.
+  Appearance changes apply immediately without recreating the screen or casting service. Language and appearance sheets stay open after a selection until the user dismisses them. Playback summaries explicitly identify the subtitle setting.
 - An embedded browser remains available during extraction when playback needs
   user interaction. Protected DRM video is unsupported.
 - Current public casting RPCs expose start, status, and stop, not seeking,

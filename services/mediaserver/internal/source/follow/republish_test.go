@@ -3,6 +3,7 @@ package follow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -59,6 +60,38 @@ func TestATimelineCastorCannotStartStaysFfmpegsToRead(t *testing.T) {
 	refused := &scripted{replies: []reply{{err: &timeline.Failure{Status: http.StatusForbidden, Err: errors.New("expired")}}}}
 	if got := republished(t, shape{timeline: refused}).String(); got != "https://cdn.example/live/index.m3u8" {
 		t.Errorf("an unreadable timeline reads %s, want the origin's own", got)
+	}
+}
+
+func TestARefusedPlaylistReloadFailsTheReadUnlessItRecovers(t *testing.T) {
+	for _, recover := range []bool{false, true} {
+		t.Run(fmt.Sprint(recover), func(t *testing.T) {
+			refused := &timeline.Failure{Status: http.StatusForbidden, Err: errors.New("expired playlist")}
+			origin := &scripted{replies: []reply{{window: listed("a", 0, 3)}, {err: refused}, {window: listed("a", 1, 4)}}}
+			program, err := media.NewProgram(media.Program{
+				Inputs:     []media.Input{{ID: media.PrimaryInputID, URL: sourcetest.URL(t, "https://origin.example/index.m3u8"), ContentType: media.HLS}},
+				Tracks:     []media.TrackRef{{Input: media.PrimaryInputID, Kind: media.TrackVideo}},
+				ClockInput: media.PrimaryInputID, EndPolicy: media.EndAtLongest,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			followed, stop, err := New(&sourcetest.Document{}, source.Formats{shape{timeline: origin}}, nil).Republish(t.Context(), program)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = stop() })
+			input, _ := followed.PrimaryInput()
+			if status, _ := fetch(t, input.URL.String()); status != http.StatusForbidden {
+				t.Fatalf("reload status = %d", status)
+			}
+			if recover {
+				fetch(t, input.URL.String())
+			}
+			if err := stop(); errors.Is(err, refused) == recover {
+				t.Fatalf("stop = %v, recovered = %v", err, recover)
+			}
+		})
 	}
 }
 

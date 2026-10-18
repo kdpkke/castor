@@ -133,11 +133,18 @@ func (s *Stream) resumeLive(header string) served {
 		return result
 	}
 	start, last, ok := byteRange(header)
-	if !ok || s.rangesDeclined() || start >= end {
+	if !ok || s.rangesDeclined() {
 		return served{code: http.StatusRequestedRangeNotSatisfiable, total: total}
 	}
 	if start < first {
 		return served{code: http.StatusGone, total: total}
+	}
+	// A growing byte-zero response must follow future bytes, not end at a snapshot.
+	if !closed && start == 0 && last < 0 {
+		return result
+	}
+	if start >= end {
+		return served{code: http.StatusRequestedRangeNotSatisfiable, total: total}
 	}
 	if last < 0 || last >= end {
 		last = end - 1

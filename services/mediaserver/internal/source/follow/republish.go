@@ -3,6 +3,7 @@ package follow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -80,6 +81,11 @@ func (r Republisher) Republish(parent context.Context, program media.Program) (m
 		cancel()
 		err := server.Close()
 		stop()
+		for _, feed := range feeds {
+			feed.mu.Lock()
+			err = errors.Join(err, feed.refused)
+			feed.mu.Unlock()
+		}
 		return err
 	}, nil
 }
