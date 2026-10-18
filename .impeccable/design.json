@@ -910,11 +910,11 @@
     "sources": [
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/theme/Glass.kt",
-        "sha256": "0914e245a74c0aa69e4b0dfadf18db3bc47b89c221c68aba3bdfaa2f989b5555"
+        "sha256": "00d257b5ed364fbecb4088fe84534265029e4713557b5330d8334a15bfb48212"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/theme/Theme.kt",
-        "sha256": "e7ad9d3d3dc57281853b3a9c6b66232b07169b164453dc5db80497013dfec3ae"
+        "sha256": "8ff62e47ee27fc15339ca87b0301005f2af0b48327567fca001f3db98a13f64e"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/theme/Type.kt",
@@ -922,31 +922,31 @@
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/MainScreen.kt",
-        "sha256": "6b5d92a8e42edd1ece42b31855f02a2a13715bb707bb91299ca593fd26e3f446"
+        "sha256": "9510b850e571d46a18d35e86e439a6aec2eb463f00f5679458a5fe5ca82fbd8f"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/CastingSheets.kt",
-        "sha256": "5d3b9ba3a83a60981a7dff7d431afb1c6c2b949a26e46c3938882fd277905114"
+        "sha256": "eba4575b28eddb337f28fac63b29c4dab38e8486fc2b06c2c43cff5845db83d1"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/CastOptions.kt",
-        "sha256": "3cf5da9c77ef9b055807ef8a29b3c3b3bd45593cefdd2de377765b0fe4ac81dd"
+        "sha256": "25963c2d6cbab1dee641254a17aac579a1d69f15495522637c4e06bc1dbf5f18"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/MainScreenViewModel.kt",
-        "sha256": "a5aa522191a3061827bbb81464b96f0788c4e777b974f044db8866e6518ac1ed"
+        "sha256": "29011f1ad08a5c709c78f6a6f7de2d4757fff635b661a6e00cc18dce6289e411"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/MainActivity.kt",
-        "sha256": "b048f3faebfe2abd29f7439cbeb7ec89af1e0bf2e277065c176e6e05997da0fe"
+        "sha256": "a9cb7bfe97cb74eb364540d67f4795dd853cd6d31bd941b68b1cfd5e6acfb1a7"
       },
       {
         "path": "android/app/src/main/res/values/strings.xml",
-        "sha256": "06ccfeb5326bbbcc3123fb1243333f70547aafddb4e4fb26e14d8a19be536540"
+        "sha256": "0c89cff5311319f3989ed432786a995eea4ddc1b6ae4715afaffccdd7f673c3a"
       },
       {
         "path": "android/app/src/main/res/values-it/strings.xml",
-        "sha256": "5922f169e6ef59007bf9f975045e9e6adc42071c32a98c8071d6161889c32ae7"
+        "sha256": "701afdf06d8a990086cf846ead05e7ee25cd056e5fd5aadff2fa8ea749e2732d"
       },
       {
         "path": "android/gradle/libs.versions.toml",
@@ -954,15 +954,15 @@
       },
       {
         "path": "android/app/src/androidTest/java/io/github/stupside/castor/ui/main/DesignEvidenceTest.kt",
-        "sha256": "fb9ac43595f9a194fb57016fdcadd5ecb58d86ed9352258347fb6c7ec8e2cedf"
+        "sha256": "b55ff0b46a1249290b8c300c7a9ea47a9847b6f8b37e408297130ad9443ae9ae"
       },
       {
         "path": "PRODUCT.md",
-        "sha256": "4d583ae34ffb2dbcefca168991c22e5ccad540336cf6a545ff9a46f09de7bd9e"
+        "sha256": "4e41db034c51e1541e245c4595dedc65500c92cd4fe5993609ab5122ff1f1958"
       },
       {
         "path": ".impeccable/surfaces/hub-stupside-castor-ui-main-mainscreen-kt-e7e7bf1a.md",
-        "sha256": "a3fd00a91e6f5c68ceb2c754e23acabe332b2ea4f6c33e7977692b252f8f6c94"
+        "sha256": "a8217a316e68f09d81c1283280d9752c20dc8357fd43b48a726e32a68397f448"
       },
       {
         "path": "android/app/src/androidTest/java/io/github/stupside/castor/ui/main/AppLanguageTest.kt",
@@ -1169,7 +1169,8 @@
       "presentation": "AppThemePicker reuses AppChoiceRow, selectableGroup/RadioButton semantics, 76dp minimum rows, medium glass shape, titleLarge/bodySmall, selected accent fill/checkmark, scrollable GlassSheet and Close. Selection closes immediately.",
       "tokens": "Existing light/dark palettes, type and glass material unchanged.",
       "evidenceFixture": "DesignEvidenceTest explicitly uses CastorTheme(AppTheme.System) and passes System to MainScreen; fixture night-mode captures do not change the production Dark default."
-    }
+    },
+    "sourceLineEndings": "LF, enforced by Git attributes for recorded text sources."
   },
   "components": [
     {

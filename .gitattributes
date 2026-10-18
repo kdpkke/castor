@@ -1,0 +1,4 @@
+DESIGN.md text eol=lf
+PRODUCT.md text eol=lf
+.impeccable/design.json text eol=lf
+.impeccable/surfaces/*.md text eol=lf
