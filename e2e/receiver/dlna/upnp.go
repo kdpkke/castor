@@ -16,7 +16,7 @@ import (
 type upnp struct {
 	session *receiver.Session
 	sink    string
-	fetch   func(s *receiver.Session, uri, declared string)
+	fetch   func(s *receiver.Session, uri, declared, features string)
 
 	mu sync.Mutex
 	// locked is how many more SetAVTransportURI the transport refuses.
@@ -90,7 +90,10 @@ func (u *upnp) actions() map[string]func(envelope) (string, int) {
 				u.session.Problem("Play before SetAVTransportURI")
 				return "", 0
 			}
-			u.fetch(u.session, uri, didlContentType(meta))
+			for _, track := range didlCaptions(meta) {
+				u.fetchCaption(track)
+			}
+			u.fetch(u.session, uri, didlContentType(meta), didlFeatures(meta))
 			return "", 0
 		},
 		"Pause": func(envelope) (string, int) {
@@ -101,6 +104,7 @@ func (u *upnp) actions() map[string]func(envelope) (string, int) {
 			u.session.Hold(true)
 			return "", 0
 		},
+		"Stop": func(envelope) (string, int) { u.session.Stop(); return "", 0 },
 		"GetTransportInfo": func(envelope) (string, int) {
 			return "<CurrentTransportState>" + u.transportState() + "</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>", 0
 		},
@@ -147,4 +151,21 @@ func (u *upnp) transportState() string {
 		return "PAUSED_PLAYBACK"
 	}
 	return transportStates[state]
+}
+
+// fetchCaption reads a text track the way a TV does and records it.
+func (u *upnp) fetchCaption(url string) {
+	req, err := http.NewRequestWithContext(u.session.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		u.session.Problem("caption track %q: %v", url, err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		u.session.Problem("caption track %q: %v", url, err)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	u.session.Caption(string(body))
 }

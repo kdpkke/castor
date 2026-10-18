@@ -10,6 +10,7 @@ import (
 	"github.com/stupside/castor/services/mediaserver/internal/cast"
 	"github.com/stupside/castor/services/mediaserver/internal/cast/deliver"
 	"github.com/stupside/castor/services/mediaserver/internal/cast/execute"
+	"github.com/stupside/castor/services/mediaserver/internal/cast/output/adapters"
 	"github.com/stupside/castor/services/mediaserver/internal/cast/recovery"
 	"github.com/stupside/castor/services/mediaserver/internal/ffmpeg"
 	"github.com/stupside/castor/services/mediaserver/internal/media"
@@ -36,29 +37,30 @@ const (
 
 // backend is the machinery the media server casts with, bound to c.
 func (c *Config) backend() func(*mediav1.PlaybackSettings) cast.Caster {
-	ffmpegBinary, ffprobeBinary := c.FFmpeg.Path, c.FFmpeg.ProbePath
-	// One origin session for the engine, so every cast and identification share its cookies.
-	client := web.New(fetchTimeout)
-	e := &engine{
-		cfg:    *c,
-		client: client,
+	ffmpegBinary, ffprobeBinary := c.Servers.Media.FFmpeg.Path, c.Servers.Media.FFmpeg.ProbePath
+	shared := engine{
+		cfg: *c,
 		machinery: execute.Machinery{
+			Outputs:    adapters.Default(),
 			FFmpegPath: ffmpegBinary,
 			Binary:     ffmpeg.Inspect(ffmpegBinary),
 			Encoders:   ffmpeg.Encoders(ffmpegBinary),
 			Probes:     probe.FFprobe(ffprobeBinary),
-			Timelines:  follow.New(client, formats, follow.Repackager(ffmpegBinary)),
 			InputArgs:  formats.InputArgs,
 		},
 	}
 	return func(asked *mediav1.PlaybackSettings) cast.Caster {
+		// Host capabilities are immutable and shared; origin credentials and
+		// timeline readers belong to this cast, including its recovery attempts.
+		e := shared
+		e.client = web.New(fetchTimeout)
+		e.machinery.Timelines = follow.New(e.client, formats, follow.Repackager(ffmpegBinary))
 		return caster{
-			Ranker: rank.New(e.cfg.Resolver.Config, media.HeightCap(asked.GetMaxHeight()), func(s *source.Stream) media.Prober {
-				return candidateProbe{engine: e, stream: s, maxHeight: media.HeightCap(asked.GetMaxHeight())}
+			Ranker: rank.New(e.cfg.Servers.Media.Resolver.Config, media.HeightCap(asked.GetMaxHeight()), func(s *source.Stream) media.Prober {
+				return candidateProbe{engine: &e, stream: s, maxHeight: media.HeightCap(asked.GetMaxHeight())}
 			}),
-			engine: e,
+			engine: &e,
 			asked:  asked,
-			subs:   e.subtitles(asked.GetSubtitles()),
 		}
 	}
 }
@@ -69,17 +71,18 @@ type engine struct {
 	machinery execute.Machinery
 }
 
-// subtitles burns in the selected language with the configured whisper model, none when the selection disables them.
-func (e *engine) subtitles(selection *castorv1.SubtitleSelection) execute.Subtitles {
-	if selection.GetDisabled() != nil {
+// subtitles transcribes the selected language with Whisper; delivery chooses a native track or burn-in.
+func (e *engine) subtitles(selection *castorv1.SubtitleSelection, audioLanguage string) execute.Subtitles {
+	if !selection.GetPreferences().GetTranscribeIfMissing() {
 		return nil
 	}
-	language := selection.GetLanguage()
-	if selection.GetAutoDetect() != nil {
-		language = "auto"
+	preferred := selection.GetPreferences().GetLanguages()
+	language := transcriptLanguage(preferred, audioLanguage)
+	if language == "" {
+		return nil
 	}
-	return func(ctx context.Context, workDir string) execute.Burn {
-		b, err := whisper.New(ctx, e.cfg.Whisper, language, workDir)
+	return func(ctx context.Context) execute.Transcript {
+		b, err := whisper.New(ctx, e.cfg.Servers.Media.Whisper, language)
 		if err != nil {
 			slog.WarnContext(ctx, "whisper init failed; casting without subtitles", "error", err)
 			return nil
@@ -88,12 +91,36 @@ func (e *engine) subtitles(selection *castorv1.SubtitleSelection) execute.Subtit
 	}
 }
 
+// transcriptLanguage follows the selected audio when its language is declared.
+// Without that fact, the first subtitle preference is the explicit best guess.
+func transcriptLanguage(preferred []string, audioLanguage string) string {
+	if audioLanguage != "" {
+		for _, language := range preferred {
+			if source.SameLanguage(audioLanguage, language) {
+				return language
+			}
+		}
+		return ""
+	}
+	if len(preferred) > 0 {
+		return preferred[0]
+	}
+	return ""
+}
+
+// captions shows the source's own captions in the selected language, none when the selection disables them.
+func (e *engine) captions(selection *castorv1.SubtitleSelection) *execute.Captions {
+	if selection.GetDisabled() != nil {
+		return nil
+	}
+	return &execute.Captions{Languages: selection.GetPreferences().GetLanguages(), Client: e.client}
+}
+
 // caster ranks and plays one cast as it was asked.
 type caster struct {
 	*rank.Ranker
 	engine *engine
 	asked  *mediav1.PlaybackSettings
-	subs   execute.Subtitles
 }
 
 // Measure names what a link carries when it says nothing, then measures it.
@@ -109,7 +136,7 @@ func (k caster) Play(ctx context.Context, device execute.Device, listeners deliv
 		Machinery: k.engine.machinery,
 		Device:    device,
 		Listeners: listeners,
-		Subtitles: k.subs,
+		Captions:  k.engine.captions(k.asked.GetSubtitles()),
 		MaxHeight: media.HeightCap(k.asked.GetMaxHeight()),
 	}
 	// The ranked streams, head first; the rest are what recovery switches to.
@@ -118,5 +145,23 @@ func (k caster) Play(ctx context.Context, device execute.Device, listeners deliv
 		Deadline:   readDeadline,
 		Delivery:   wire.FromDelivery(k.asked.GetDelivery()),
 		Turns:      turns,
-	}, run, source.NewResolver(k.engine.client, run.MaxHeight, formats))
+	}, subtitleRunner{Cast: run, engine: k.engine, selection: k.asked.GetSubtitles()}, source.NewResolver(k.engine.client, run.MaxHeight, k.asked.GetAudio().GetLanguages(), formats))
+}
+
+// subtitleRunner binds the generated-caption language after source resolution,
+// before composition decides whether a buffered PCM read is needed.
+type subtitleRunner struct {
+	execute.Cast
+	engine    *engine
+	selection *castorv1.SubtitleSelection
+}
+
+func (r subtitleRunner) Run(ctx context.Context, attempt recovery.Attempt) recovery.Outcome {
+	r.Cast.Subtitles = r.engine.subtitles(r.selection, attempt.Rendition.AudioLanguage)
+	if r.selection.GetPreferences().GetTranscribeIfMissing() && r.Cast.Subtitles == nil {
+		slog.WarnContext(ctx, "transcription skipped: selected audio language is not among subtitle preferences",
+			"audio_language", attempt.Rendition.AudioLanguage,
+			"preferred_languages", r.selection.GetPreferences().GetLanguages())
+	}
+	return r.Cast.Run(ctx, attempt)
 }

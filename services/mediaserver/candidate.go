@@ -28,7 +28,7 @@ func (p candidateProbe) Probe(ctx context.Context) (media.ProbeInfo, media.Reach
 		return info, reach, err
 	}
 	slog.InfoContext(ctx, "measuring HLS without a usable picture through the segment reader", "host", s.URL.Host)
-	resolved, err := source.NewResolver(e.client, p.maxHeight, formats).Resolve(ctx, s, source.Rendition{})
+	resolved, err := source.NewResolver(e.client, p.maxHeight, nil, formats).Resolve(ctx, s, source.Rendition{})
 	if err != nil {
 		return media.ProbeInfo{}, reach, err
 	}

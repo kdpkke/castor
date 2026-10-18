@@ -3,7 +3,6 @@ syntax = "proto3";
 package castor.media.v1;
 
 import "buf/validate/validate.proto";
-import "castor/v1/device.proto";
 import "google/protobuf/descriptor.proto";
 
 // DeviceService lends a device to a cast: its lender holds it for the whole cast, playing what the cast asks through Drive and answering through Answer.
@@ -15,10 +14,8 @@ service DeviceService {
 
 message DriveRequest {
   string cast_id = 1 [(buf.validate.field).string.min_len = 1];
-  // device is the lent device as the public API names it, for the cast's lines; a pinned one has no id.
-  castor.v1.Device device = 2 [(buf.validate.field).required = true];
   // capabilities are the lent device's, read once its lender has connected to it for the whole cast.
-  Capabilities capabilities = 3 [(buf.validate.field).required = true];
+  Capabilities capabilities = 2 [(buf.validate.field).required = true];
 }
 
 message DriveResponse {
@@ -41,14 +38,15 @@ message AnswerResponse {}
 
 // Capabilities is what a device decodes natively and how it takes a stream.
 message Capabilities {
-  repeated Container containers = 1;
-  repeated VideoSupport video = 2;
-  repeated AudioSupport audio = 3;
-  // served_container is what a served cast that remuxes is muxed into.
-  Container served_container = 4;
-  bool deinterlaces = 5;
+  // Atomic playback envelopes in preference order; the first is the default.
+  repeated FormatSupport formats = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 128
+  }];
+  string provenance = 2;
+  bool deinterlaces = 3;
   // served_headers are set on every response the device fetches what it is served from.
-  map<string, string> served_headers = 6 [(buf.validate.field).map = {
+  map<string, string> served_headers = 4 [(buf.validate.field).map = {
     keys: {
       string: {well_known_regex: KNOWN_REGEX_HTTP_HEADER_NAME}
     }
@@ -60,20 +58,99 @@ message Capabilities {
     }
   }];
   // self_fetch is whether the device fetches a stream URL itself, rather than only playing what it is served.
-  bool self_fetch = 7;
+  bool self_fetch = 5;
+}
+
+message FormatSupport {
+  oneof transport {
+    option (buf.validate.oneof).required = true;
+    ProgressiveSupport progressive = 1;
+    HLSSupport hls = 2;
+  }
+  oneof tracks {
+    option (buf.validate.oneof).required = true;
+    VideoSupport video = 3;
+    AudioSupport audio = 4;
+    AVSupport av = 5;
+  }
+  // Complete subtitle documents fetched separately from media.
+  repeated CaptionFormat captions = 6 [(buf.validate.field).repeated.items.enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+message AVSupport {
+  VideoSupport video = 1 [(buf.validate.field).required = true];
+  AudioSupport audio = 2 [(buf.validate.field).required = true];
+}
+
+message ProgressiveSupport {
+  enum Container {
+    CONTAINER_UNSPECIFIED = 0;
+    CONTAINER_MP4 = 1;
+    CONTAINER_MPEGTS = 2;
+    CONTAINER_MKV = 3;
+    CONTAINER_WEBM = 4;
+  }
+  Container container = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+message HLSSupport {
+  enum Subtitles {
+    SUBTITLES_UNSPECIFIED = 0;
+    SUBTITLES_WEBVTT = 1;
+  }
+  // Subtitle rendition playlists refreshed alongside the media playlist.
+  Subtitles subtitles = 1 [(buf.validate.field).enum.defined_only = true];
 }
 
 message VideoSupport {
-  VideoCodec codec = 1;
+  VideoCodec codec = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
   // profiles are those decoded; none is any.
-  repeated Profile profiles = 2;
-  repeated uint32 bit_depths = 3;
+  repeated Profile profiles = 2 [(buf.validate.field).repeated = {
+    max_items: 16
+    items: {
+      enum: {
+        defined_only: true
+        not_in: [0]
+      }
+    }
+  }];
+  repeated uint32 bit_depths = 3 [(buf.validate.field).repeated = {
+    max_items: 8
+    items: {
+      uint32: {
+        in: [
+          8,
+          10,
+          12
+        ]
+      }
+    }
+  }];
   uint32 max_level = 4;
 }
 
 message AudioSupport {
-  AudioCodec codec = 1;
+  AudioCodec codec = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
   uint32 max_channels = 2;
+}
+
+// CaptionFormat is how a caption track is written.
+enum CaptionFormat {
+  CAPTION_FORMAT_UNSPECIFIED = 0;
+  CAPTION_FORMAT_VTT = 1;
+  CAPTION_FORMAT_SRT = 2;
 }
 
 // Container is how a stream is packaged, as a device takes it.
@@ -119,22 +196,22 @@ enum Profile {
 
 // DeviceCommand is one call a cast makes on the device lent to it.
 message DeviceCommand {
-  option (buf.validate.message).cel = {
-    id: "device_command.id"
-    message: "id is set on every command but cancel, and empty on cancel"
-    expression: "has(this.cancel) == (this.id == '')"
-  };
-
-  string id = 1;
   oneof command {
     option (buf.validate.oneof).required = true;
-    Play play = 2;
-    AwaitEnd await_end = 3;
-    // cancel abandons a command still running; it is never answered.
-    Cancel cancel = 4;
-    // pause holds the device on its current picture until resume; the media server pauses a device its source cannot keep ahead of.
-    Pause pause = 5;
-    Resume resume = 6;
+    Call call = 1;
+    // Cancellation identifies an existing call and is never answered.
+    Cancel cancel = 2;
+  }
+
+  message Call {
+    string id = 1 [(buf.validate.field).string.min_len = 1];
+    oneof operation {
+      option (buf.validate.oneof).required = true;
+      Play play = 2;
+      AwaitEnd await_end = 3;
+      Pause pause = 4;
+      Resume resume = 5;
+    }
   }
 
   message Play {
@@ -151,6 +228,28 @@ message DeviceCommand {
       defined_only: true
       not_in: [0]
     }];
+    repeated Caption captions = 3;
+  }
+
+  // Caption is a text track the device shows over the stream; its url is fetched like the stream's.
+  message Caption {
+    string url = 1 [
+      (buf.validate.field).string.max_len = 8192,
+      (buf.validate.field).cel = {
+        id: "caption.url.http"
+        message: "must be an http or https URL"
+        expression: "this.isUri() && (this.startsWith('http://') || this.startsWith('https://'))"
+      }
+    ];
+    CaptionFormat format = 2 [(buf.validate.field).enum = {
+      defined_only: true
+      not_in: [0]
+    }];
+    // language is the ISO 639 code the track is tagged with, empty when untagged.
+    string language = 3;
+    string name = 4;
+    // default is shown without the viewer choosing it.
+    bool default = 5;
   }
 
   message AwaitEnd {}

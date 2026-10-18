@@ -49,7 +49,7 @@ class CastorService : Service() {
     super.onCreate()
     val notifications = getSystemService(NotificationManager::class.java)
     notifications.createNotificationChannel(
-      NotificationChannel("casting", "Casting", NotificationManager.IMPORTANCE_LOW),
+      NotificationChannel("casting", "Casting", NotificationManager.IMPORTANCE_LOW)
     )
     val stop =
       PendingIntent.getService(
@@ -114,15 +114,15 @@ class CastorService : Service() {
               "HOME" to filesDir.path,
               "TMPDIR" to cacheDir.path,
               "XDG_CACHE_HOME" to cacheDir.path,
-              "CASTOR_API__TOKEN" to apiToken,
-              "CASTOR_SERVER__TOKEN" to mediaToken,
-              "CASTOR_SCRAPING__URL" to bridge!!.url,
-              "CASTOR_SCRAPING__TOKEN" to scrapingToken,
-              "CASTOR_FFMPEG__PATH" to "$native/libffmpeg.so",
-              "CASTOR_FFMPEG__PROBE_PATH" to "$native/libffprobe.so",
+              "CASTOR_SERVERS__API__TOKEN" to apiToken,
+              "CASTOR_SERVERS__MEDIA__TOKEN" to mediaToken,
+              "CASTOR_SERVERS__SCRAPING__URL" to bridge!!.url,
+              "CASTOR_SERVERS__SCRAPING__TOKEN" to scrapingToken,
+              "CASTOR_SERVERS__MEDIA__FFMPEG__PATH" to "$native/libffmpeg.so",
+              "CASTOR_SERVERS__MEDIA__FFMPEG__PROBE_PATH" to "$native/libffprobe.so",
               "SSL_CERT_FILE" to certificates.path,
               "LD_LIBRARY_PATH" to native,
-            ),
+            )
           )
         val child = builder.start()
         withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {

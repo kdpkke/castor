@@ -922,7 +922,7 @@
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/MainScreen.kt",
-        "sha256": "9510b850e571d46a18d35e86e439a6aec2eb463f00f5679458a5fe5ca82fbd8f"
+        "sha256": "9d7bc64ae2b431630e2020d8d2f470e1a1fae7617605127a56ffe514826a9bed"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/CastingSheets.kt",
@@ -934,7 +934,7 @@
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/ui/main/MainScreenViewModel.kt",
-        "sha256": "29011f1ad08a5c709c78f6a6f7de2d4757fff635b661a6e00cc18dce6289e411"
+        "sha256": "df517454f11c535fb0bee4efc76107e6560d76ab58a4e784bc5f8c6d4b06af00"
       },
       {
         "path": "android/app/src/main/java/io/github/stupside/castor/MainActivity.kt",
@@ -942,11 +942,11 @@
       },
       {
         "path": "android/app/src/main/res/values/strings.xml",
-        "sha256": "0c89cff5311319f3989ed432786a995eea4ddc1b6ae4715afaffccdd7f673c3a"
+        "sha256": "65f415d41de740b2543c10b9f7ad1463cac218352decbc01ebb1455b2e8b90ae"
       },
       {
         "path": "android/app/src/main/res/values-it/strings.xml",
-        "sha256": "701afdf06d8a990086cf846ead05e7ee25cd056e5fd5aadff2fa8ea749e2732d"
+        "sha256": "d7f1cfe6dcadf79f897666b89bf323028d3950ab8418fb87e4b7454d4ce9e28b"
       },
       {
         "path": "android/gradle/libs.versions.toml",
@@ -958,7 +958,7 @@
       },
       {
         "path": "PRODUCT.md",
-        "sha256": "4e41db034c51e1541e245c4595dedc65500c92cd4fe5993609ab5122ff1f1958"
+        "sha256": "42d29991192881f814b99766eb2fa21c6c11dbb58f5e82ff61b87e45773745c7"
       },
       {
         "path": ".impeccable/surfaces/hub-stupside-castor-ui-main-mainscreen-kt-e7e7bf1a.md",
@@ -977,7 +977,7 @@
         "sha256": "e85f2dbd34e288595d70512d04a34f4b27bdb1793dc7a9b9fec66aeb355fa3db"
       }
     ],
-    "designMdSha256": "ec368c6d7f7e8d76f624f2a3dd6d9057909e7e9f6ce13a7c63bd49125df5ac8b",
+    "designMdSha256": "c6ffd92ed30afa96c96fc1feee3c69c63ab54a0df738a440f78eae225ab2d48d",
     "previewMode": "native-source-excerpts",
     "previewLimitations": "Self-contained escaped Kotlin source sections rendered in pre/code with local CSS. These are native implementation references; they do not simulate native controls in HTML or execute Compose. Use native emulator captures for appearance; dependencies and imports remain in their cited source files.",
     "tonalRampPolicy": "Generated OKLCH strips are non-normative panel visualization only, including fill color ramps shown without alpha. Actual palette and computed translucent fill colors live in DESIGN.md frontmatter; Android composition lives in Glass.kt.",
@@ -1170,7 +1170,13 @@
       "tokens": "Existing light/dark palettes, type and glass material unchanged.",
       "evidenceFixture": "DesignEvidenceTest explicitly uses CastorTheme(AppTheme.System) and passes System to MainScreen; fixture night-mode captures do not change the production Dark default."
     },
-    "sourceLineEndings": "LF, enforced by Git attributes for recorded text sources."
+    "sourceLineEndings": "LF, enforced by Git attributes for recorded text sources.",
+    "upstreamAlignment": {
+      "baseCommit": "af8c784a78e0611c3342bbadf8f41ea6b9776563",
+      "versionCode": 11,
+      "subtitlePolicy": "Saved auto follows the selected app language; explicit SubtitlePreferences prefer source captions and enable transcription only as fallback.",
+      "visualEvidence": "Existing versionCode 8/10 captures remain attributed historical references for unchanged components; settings-native is recaptured by the versionCode 11 device suite."
+    }
   },
   "components": [
     {

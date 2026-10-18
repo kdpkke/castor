@@ -28,10 +28,10 @@ type Resolver struct {
 	formats Formats
 }
 
-// NewResolver binds resolution to the client that reads origins, the tallest picture a cast shows and the formats it reads.
-func NewResolver(client Client, maxHeight media.HeightCap, formats Formats) *Resolver {
+// NewResolver tries audio languages in order, then uses the source's default.
+func NewResolver(client Client, maxHeight media.HeightCap, audioLanguages []string, formats Formats) *Resolver {
 	return &Resolver{
-		env:     Env{Client: client, MaxHeight: maxHeight},
+		env:     Env{Client: client, MaxHeight: maxHeight, AudioLanguages: audioLanguages},
 		formats: formats,
 	}
 }
@@ -53,6 +53,18 @@ func (r *Resolver) Resolve(ctx context.Context, stream *Stream, chosen Rendition
 	}
 	if drm := resolved.Origin.Protection; drm != "" {
 		return resolved, fmt.Errorf("the source is protected by DRM (%s), which castor cannot decrypt", drm)
+	}
+	if selected := resolved.Rendition.AudioLanguage; selected != "" && len(r.env.AudioLanguages) > 0 {
+		matched := false
+		for _, preferred := range r.env.AudioLanguages {
+			if SameLanguage(selected, preferred) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			slog.WarnContext(ctx, "the selected audio is not in the preferred languages", "selected", selected, "languages", r.env.AudioLanguages)
+		}
 	}
 	slog.InfoContext(ctx, "source resolved", "content_type", stream.ContentType)
 	return resolved, nil

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -87,7 +88,7 @@ func TestADevicesAnswersAreReadAsItSendsThem(t *testing.T) {
 			jsontext.Value(`{"type":"MEDIA_STATUS","status":[{"mediaSessionId":1,"playbackRate":1,"playerState":"IDLE","currentTime":596.4,"supportedMediaCommands":12303,"volume":{"level":1,"muted":false},"currentItemId":1,"idleReason":"FINISHED","extendedStatus":null}],"requestId":0}`),
 		}
 	})
-	if err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_MP4); err != nil {
+	if err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_MP4, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := dev.AwaitEnd(t.Context()); err != nil {
@@ -120,7 +121,7 @@ func TestChromecastPlayReturnsTheReceiversVerdictOnTheLoad(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dev := receiverAnswering(t, tt.answer)
-			err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_HLS)
+			err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_HLS, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Play = %v, want error %v", err, tt.wantErr)
 			}
@@ -134,7 +135,7 @@ func TestALoadNamesItsContainerAsAReceiverKnowsIt(t *testing.T) {
 		loaded <- load.ContentType
 		return []any{mediaStatus(id, load.ContentId, "BUFFERING", "")}
 	})
-	if err := dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test", Path: "/stream.m3u8"}, mediav1.Container_CONTAINER_HLS); err != nil {
+	if err := dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test", Path: "/stream.m3u8"}, mediav1.Container_CONTAINER_HLS, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-loaded; got != "application/x-mpegURL" {
@@ -151,10 +152,10 @@ func TestAPlayRetriedAfterARefusedOneIsAwaitedToItsOwnEnd(t *testing.T) {
 		}
 		return []any{mediaStatus(id, load.ContentId, "PLAYING", ""), mediaStatus(0, load.ContentId, "IDLE", "FINISHED")}
 	})
-	if err := dev.Play(t.Context(), refused, mediav1.Container_CONTAINER_MP4); err == nil {
+	if err := dev.Play(t.Context(), refused, mediav1.Container_CONTAINER_MP4, nil); err == nil {
 		t.Fatal("the receiver refused the first load, yet Play accepted it")
 	}
-	if err := dev.Play(t.Context(), retried, mediav1.Container_CONTAINER_MP4); err != nil {
+	if err := dev.Play(t.Context(), retried, mediav1.Container_CONTAINER_MP4, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := dev.AwaitEnd(t.Context()); err != nil {
@@ -175,9 +176,9 @@ func TestAPlayAbandonedForANewerOneLeavesTheNewerOneWatched(t *testing.T) {
 	})
 	ctx, abandon := context.WithCancel(t.Context())
 	first := make(chan error, 1)
-	go func() { first <- dev.Play(ctx, abandoned, mediav1.Container_CONTAINER_MP4) }()
+	go func() { first <- dev.Play(ctx, abandoned, mediav1.Container_CONTAINER_MP4, nil) }()
 	<-loading
-	if err := dev.Play(t.Context(), current, mediav1.Container_CONTAINER_MP4); err != nil {
+	if err := dev.Play(t.Context(), current, mediav1.Container_CONTAINER_MP4, nil); err != nil {
 		t.Fatal(err)
 	}
 	abandon()
@@ -198,7 +199,7 @@ func TestAPlayOnADroppedConnectionIsGone(t *testing.T) {
 	t.Cleanup(func() { _ = dev.Close() })
 	_ = far.Close()
 	<-dev.ch.gone
-	if _, gone := errors.AsType[*device.Gone](dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test"}, mediav1.Container_CONTAINER_MP4)); !gone {
+	if _, gone := errors.AsType[*device.Gone](dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test"}, mediav1.Container_CONTAINER_MP4, nil)); !gone {
 		t.Error("a Play on a connection the receiver dropped is not reported gone, so its lender never connects again")
 	}
 }
@@ -213,7 +214,7 @@ func TestChromecastClosesWhileTheReceiverKeepsTalking(t *testing.T) {
 			}
 			return answers
 		})
-		if err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_MP4); err != nil {
+		if err := dev.Play(t.Context(), stream, mediav1.Container_CONTAINER_MP4, nil); err != nil {
 			t.Fatalf("Play = %v", err)
 		}
 		if err := dev.Close(); err != nil {
@@ -317,6 +318,47 @@ func TestAnInvalidCastFrameClosesTheSocket(t *testing.T) {
 		}
 		if _, err := far.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
 			t.Fatalf("read after invalid frame = %v, want the socket closed", err)
+		}
+	})
+}
+
+func TestCaptionsAreLoadedAsTextTracksWithTheDefaultActive(t *testing.T) {
+	tracks, active := textTracks([]*mediav1.DeviceCommand_Caption{
+		{Url: "http://media.test/a.vtt", Format: mediav1.CaptionFormat_CAPTION_FORMAT_VTT, Language: "en", Name: "English", Default: true},
+		{Url: "http://media.test/b.vtt", Format: mediav1.CaptionFormat_CAPTION_FORMAT_VTT, Language: "fr"},
+	})
+	if len(tracks) != 2 || tracks[1].TrackID != 2 || tracks[0].TrackContentType != "text/vtt" || tracks[0].Type != "TEXT" {
+		t.Errorf("tracks = %+v", tracks)
+	}
+	if len(active) != 1 || active[0] != 1 {
+		t.Errorf("active = %v, want [1]", active)
+	}
+	body, err := json.Marshal(&loadCommand{Media: mediaItem{Tracks: tracks}, ActiveTrackIds: active}, wire)
+	if err != nil || !strings.Contains(string(body), `"tracks":[{"trackId":1`) || !strings.Contains(string(body), `"activeTrackIds":[1]`) {
+		t.Errorf("LOAD = %s, %v", body, err)
+	}
+}
+
+func TestDefaultReceiverSupportsProgressiveWebVTT(t *testing.T) {
+	for _, f := range (&session{}).Capabilities().Formats {
+		if f.GetHls() != nil && f.GetHls().GetSubtitles() == mediav1.HLSSupport_SUBTITLES_WEBVTT {
+			return
+		}
+	}
+	t.Fatal("default receiver lacks explicit HLS subtitle rendition envelope")
+}
+
+func TestRequestTimeoutRetainsDeadlineIdentity(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		local, remote := net.Pipe()
+		defer local.Close()
+		defer remote.Close()
+		// Drain outgoing frames but never answer. No heartbeat participates in this request.
+		go func() { _, _ = io.Copy(io.Discard, remote) }()
+		ch := &channel{conn: local, writing: make(chan struct{}, 1), waiting: map[int]chan []byte{}, gone: make(chan struct{}), closeConn: local.Close}
+		_, err := ch.request(t.Context(), receiverID, nsReceiver, &castmedia.PayloadHeader{Type: msgGetStatus})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("request timeout lost deadline identity: %v", err)
 		}
 	})
 }

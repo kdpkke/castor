@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.stupside.castor"
         minSdk = 28
         targetSdk = 37
-        versionCode = 10
-        versionName = "1.9.0-android-dev.10"
+        versionCode = 11
+        versionName = "1.9.0-android-dev.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

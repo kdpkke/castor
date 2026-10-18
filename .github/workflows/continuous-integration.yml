@@ -61,11 +61,11 @@ jobs:
       - uses: ./.github/actions/setup
       # The real-encode tests need ffmpeg >= 7.1 (allowed_segment_extensions); apt's 6.1 lacks it. tested.sh fails on their skip.
       - run: |
-          curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz | sudo tar -xJ --strip-components=2 -C /usr/local/bin --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
+          curl -fsSL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | sudo tar -xJ --strip-components=2 -C /usr/local/bin --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
       - run: |
           eval "$(make env)"
-          CASTOR_TEST_CHROME="$(command -v google-chrome)"
-          export CASTOR_TEST_CHROME
+          TEST_CASTOR_CHROME="$(command -v google-chrome)"
+          export TEST_CASTOR_CHROME
           ./scripts/tested.sh
 
   lint:
@@ -77,7 +77,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: eval "$(make env)" && go vet ./services/... ./internal/... ./cmd/... ./e2e/...
       # Pinned so a new release never turns an unrelated push red; gen/ is buf's.
-      - run: eval "$(make env)" && go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 -checks all ./services/... ./internal/... ./cmd/... ./e2e/...
+      - run: eval "$(make env)" && go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 -checks all ./services/... ./internal/... ./cmd/... ./e2e/...
       # deadcode always exits 0, so its output is the gate; castorNativeLog is called only from C.
       - run: |
           eval "$(make env)"

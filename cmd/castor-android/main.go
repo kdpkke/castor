@@ -22,14 +22,14 @@ func main() {
 	process.Run(&cli.Command{
 		Name: "castor-android",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			apiToken, mediaToken, scrapingToken := os.Getenv("CASTOR_API__TOKEN"), os.Getenv("CASTOR_SERVER__TOKEN"), os.Getenv("CASTOR_SCRAPING__TOKEN")
+			apiToken, mediaToken, scrapingToken := os.Getenv("CASTOR_SERVERS__API__TOKEN"), os.Getenv("CASTOR_SERVERS__MEDIA__TOKEN"), os.Getenv("CASTOR_SERVERS__SCRAPING__TOKEN")
 			if apiToken == "" || mediaToken == "" || scrapingToken == "" || apiToken == mediaToken || apiToken == scrapingToken || mediaToken == scrapingToken {
 				return errors.New("the Android service must supply independent API, media, and scraping tokens")
 			}
 			browser := func(context.Context, *cli.Command) (transport.Endpoint, func(), error) {
-				return transport.Endpoint{}, nil, errors.New("scraping.url must name the Android browser service")
+				return transport.Endpoint{}, nil, errors.New("servers.scraping.url must name the Android browser service")
 			}
-			native := castorv1connect.NewDeviceServiceClient(transport.Bearer(os.Getenv("CASTOR_SCRAPING__TOKEN")), os.Getenv("CASTOR_SCRAPING__URL"), transport.Options())
+			native := castorv1connect.NewDeviceServiceClient(transport.Bearer(os.Getenv("CASTOR_SERVERS__SCRAPING__TOKEN")), os.Getenv("CASTOR_SERVERS__SCRAPING__URL"), transport.Options())
 			discovery := func(ctx context.Context) ([]*castorv1.Device, error) {
 				response, err := native.ListDevices(ctx, &castorv1.ListDevicesRequest{})
 				if err != nil {
@@ -75,5 +75,5 @@ func main() {
 				}
 			}
 		},
-	})
+	}, nil)
 }

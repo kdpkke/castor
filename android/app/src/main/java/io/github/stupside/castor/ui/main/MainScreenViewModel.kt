@@ -127,12 +127,13 @@ class MainScreenViewModel : ViewModel() {
     maxHeight: String,
     subtitles: String,
     receiverName: String = "",
+    subtitleLanguage: String = "en",
   ) {
     if (submission?.isActive == true || uiState.value.castId != null) return
     submission = viewModelScope.launch {
       val data = repository ?: return@launch
       try {
-        val request = request(url, page, target, maxHeight, subtitles)
+        val request = request(url, page, target, maxHeight, subtitles, subtitleLanguage)
         val device =
           uiState.value.devices.firstOrNull {
             if (target.hasDeviceId()) it.id == target.deviceId
@@ -239,6 +240,7 @@ class MainScreenViewModel : ViewModel() {
       target: Target,
       maxHeight: String,
       subtitles: String = "off",
+      subtitleLanguage: String = "en",
     ): CastRequest {
       require(BrowserResolver.isHttp(url) && url.length <= 8192) {
         "Enter a complete HTTP or HTTPS video URL."
@@ -260,12 +262,14 @@ class MainScreenViewModel : ViewModel() {
       val selection = SubtitleSelection.newBuilder()
       when (subtitles) {
         "off" -> selection.setDisabled(com.google.protobuf.Empty.getDefaultInstance())
-        "auto" -> selection.setAutoDetect(com.google.protobuf.Empty.getDefaultInstance())
         else -> {
-          require(Regex("^[a-z]{2,3}$").matches(subtitles)) {
+          val language = if (subtitles == "auto") subtitleLanguage else subtitles
+          require(Regex("^[a-z]{2,3}$").matches(language)) {
             "Use off, auto, or a two- or three-letter subtitle language code."
           }
-          selection.setLanguage(subtitles)
+          selection.setPreferences(
+            SubtitlePreferences.newBuilder().addLanguages(language).setTranscribeIfMissing(true)
+          )
         }
       }
       return CastRequest.newBuilder()

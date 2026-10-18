@@ -24,9 +24,15 @@ type ProbeInfo struct {
 	// VideoRotation is the display matrix's turn in degrees; no container castor serves carries it.
 	VideoRotation int
 
+	// VideoStartOffset is stream start_time minus its input's format start_time.
+	// Add the program input offset to locate the picture on the PCM clock.
+	VideoStartOffset *time.Duration
+
 	AudioCodec      Codec // e.g. CodecAAC, CodecAC3
 	AudioChannels   int   // channel count (2 = stereo, 6 = 5.1, 8 = 7.1), 0 if unknown
 	AudioSampleRate int   // Hz, 0 if unknown
+	// AudioTracks are the input's audio tracks in ffmpeg's kind-relative order.
+	AudioTracks []AudioTrack
 
 	VideoHeights []int
 
@@ -35,13 +41,23 @@ type ProbeInfo struct {
 
 	// Start is the first timestamp the source carries; InputStarts is each input's, for a program read from several.
 	Start       time.Duration
+	StartKnown  bool // distinguishes a measured zero timestamp from an absent clock
 	InputStarts map[InputID]time.Duration
+}
+
+type AudioTrack struct {
+	Language   string
+	Codec      Codec
+	Channels   int
+	SampleRate int
+	Default    bool
 }
 
 // TakeVideo is p with every picture fact taken from m; a new video field is carried here or nowhere.
 func (p ProbeInfo) TakeVideo(m ProbeInfo) ProbeInfo {
 	p.VideoCodec, p.VideoProfile, p.VideoHeight, p.VideoBitDepth = m.VideoCodec, m.VideoProfile, m.VideoHeight, m.VideoBitDepth
 	p.VideoHDR, p.VideoLevel = m.VideoHDR, m.VideoLevel
+	p.VideoStartOffset = m.VideoStartOffset
 	p.VideoInterlaced, p.VideoRotation = m.VideoInterlaced, m.VideoRotation
 	p.VideoHeights, p.ProgramHeights = slices.Clone(m.VideoHeights), maps.Clone(m.ProgramHeights)
 	return p
@@ -50,11 +66,13 @@ func (p ProbeInfo) TakeVideo(m ProbeInfo) ProbeInfo {
 // TakeAudio is p with every sound fact taken from m; a new audio field is carried here or nowhere.
 func (p ProbeInfo) TakeAudio(m ProbeInfo) ProbeInfo {
 	p.AudioCodec, p.AudioChannels, p.AudioSampleRate = m.AudioCodec, m.AudioChannels, m.AudioSampleRate
+	p.AudioTracks = slices.Clone(m.AudioTracks)
 	return p
 }
 
 func (p ProbeInfo) Clone() ProbeInfo {
 	p.VideoHeights = slices.Clone(p.VideoHeights)
+	p.AudioTracks = slices.Clone(p.AudioTracks)
 	p.ProgramHeights = maps.Clone(p.ProgramHeights)
 	p.InputStarts = maps.Clone(p.InputStarts)
 	return p

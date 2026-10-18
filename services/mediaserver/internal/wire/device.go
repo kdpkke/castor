@@ -3,6 +3,7 @@ package wire
 
 import (
 	"errors"
+	"net/url"
 
 	"google.golang.org/protobuf/proto"
 
@@ -52,29 +53,85 @@ func mime(c mediav1.Container) string {
 	return proto.GetExtension(v.Options(), mediav1.E_Mime).(string)
 }
 
+var captionFormats = map[mediav1.CaptionFormat]media.CaptionFormat{
+	mediav1.CaptionFormat_CAPTION_FORMAT_VTT: media.CaptionVTT,
+	mediav1.CaptionFormat_CAPTION_FORMAT_SRT: media.CaptionSRT,
+}
+
+// Caption is c on the wire, its URL as the device reaches it.
+func Caption(c media.Caption, reached *url.URL) *mediav1.DeviceCommand_Caption {
+	format := mediav1.CaptionFormat_CAPTION_FORMAT_VTT
+	if c.Format == media.CaptionSRT {
+		format = mediav1.CaptionFormat_CAPTION_FORMAT_SRT
+	}
+	return &mediav1.DeviceCommand_Caption{Url: reached.String(), Format: format, Language: c.Language, Name: c.Name, Default: c.Default}
+}
+
 // FromCapabilities is what the wire says a device decodes, without what this server does not know.
 func FromCapabilities(c *mediav1.Capabilities) media.Capabilities {
-	out := media.Capabilities{
-		SelfFetch:       c.GetSelfFetch(),
-		ServedContainer: mime(c.GetServedContainer()),
-		Deinterlaces:    c.GetDeinterlaces(),
-		ServedHeaders:   c.GetServedHeaders(),
-	}
-	for _, ct := range c.GetContainers() {
-		if m := mime(ct); m != "" {
-			out.Containers = append(out.Containers, m)
+	out := media.Capabilities{SelfFetch: c.GetSelfFetch(), Provenance: c.GetProvenance(), Deinterlaces: c.GetDeinterlaces(), ServedHeaders: c.GetServedHeaders()}
+	for _, f := range c.GetFormats() {
+		var transport media.Transport
+		switch t := f.GetTransport().(type) {
+		case *mediav1.FormatSupport_Progressive:
+			transport = map[mediav1.ProgressiveSupport_Container]media.Transport{
+				mediav1.ProgressiveSupport_CONTAINER_MP4:    media.TransportMP4,
+				mediav1.ProgressiveSupport_CONTAINER_MPEGTS: media.TransportMPEGTS,
+				mediav1.ProgressiveSupport_CONTAINER_MKV:    media.TransportMKV,
+				mediav1.ProgressiveSupport_CONTAINER_WEBM:   media.TransportWebM,
+			}[t.Progressive.GetContainer()]
+		case *mediav1.FormatSupport_Hls:
+			switch t.Hls.GetSubtitles() {
+			case mediav1.HLSSupport_SUBTITLES_UNSPECIFIED:
+				transport = media.TransportHLS
+			case mediav1.HLSSupport_SUBTITLES_WEBVTT:
+				transport = media.TransportHLSWebVTT
+			}
 		}
-	}
-	for _, v := range c.GetVideo() {
-		if vs, ok := fromVideo(v); ok {
-			out.Video = append(out.Video, vs)
+		if transport == 0 {
+			continue
 		}
-	}
-	for _, a := range c.GetAudio() {
-		if codec, ok := audioCodecs[a.GetCodec()]; ok {
-			out.Audio = append(out.Audio, media.AudioSupport{Codec: codec, MaxChannels: int(a.GetMaxChannels())})
+		var video *mediav1.VideoSupport
+		var audio *mediav1.AudioSupport
+		switch tracks := f.GetTracks().(type) {
+		case *mediav1.FormatSupport_Av:
+			video, audio = tracks.Av.GetVideo(), tracks.Av.GetAudio()
+			if video == nil || audio == nil {
+				continue
+			}
+		case *mediav1.FormatSupport_Video:
+			video = tracks.Video
+		case *mediav1.FormatSupport_Audio:
+			audio = tracks.Audio
+		default:
+			continue
 		}
+		envelope := media.FormatSupport{Transport: transport}
+		if video != nil {
+			v, ok := fromVideo(video)
+			if !ok {
+				continue
+			}
+			envelope.Video = v
+		}
+		if audio != nil {
+			codec, ok := audioCodecs[audio.GetCodec()]
+			if !ok {
+				continue
+			}
+			envelope.Audio = media.AudioSupport{Codec: codec, MaxChannels: int(audio.GetMaxChannels())}
+		}
+		if envelope.Video.Codec == "" && envelope.Audio.Codec == "" {
+			continue
+		}
+		for _, caption := range f.GetCaptions() {
+			if format, ok := captionFormats[caption]; ok {
+				envelope.Captions = append(envelope.Captions, format)
+			}
+		}
+		out.Formats = append(out.Formats, envelope)
 	}
+
 	return out
 }
 

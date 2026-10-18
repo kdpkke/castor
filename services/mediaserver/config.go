@@ -1,19 +1,15 @@
 package mediaserver
 
 import (
-	"github.com/stupside/castor/internal/telemetry"
 	"github.com/stupside/castor/services/mediaserver/internal/source/rank"
 	"github.com/stupside/castor/services/mediaserver/internal/subtitle/whisper"
 )
 
 // Config is the media server's sections of castor's configuration.
 type Config struct {
-	FFmpeg    FFmpegConfig     `yaml:"ffmpeg" validate:"required"`
-	Resolver  ResolverConfig   `yaml:"resolver" validate:"required"`
-	Server    ServerConfig     `yaml:"server" validate:"required"`
-	Network   NetworkConfig    `yaml:"network"`
-	Whisper   whisper.Config   `yaml:"whisper"`
-	Telemetry telemetry.Config `yaml:"telemetry"`
+	Servers struct {
+		Media ServerConfig `yaml:"media" validate:"required"`
+	} `yaml:"servers" validate:"required"`
 }
 
 // FFmpegConfig names the installed tools; mobile packages keep them in the native library directory.
@@ -34,6 +30,12 @@ type ServerConfig struct {
 	Advertise string `yaml:"advertise" validate:"omitempty,http_url"`
 	// Token is what its API asks every request to carry; devices fetch what it serves without one.
 	Token string `yaml:"token"`
+	// FFmpeg names the tools installed on this host.
+	FFmpeg FFmpegConfig `yaml:"ffmpeg" validate:"required"`
+	// Whisper configures transcription performed by this media server.
+	Whisper  whisper.Config `yaml:"whisper"`
+	Resolver ResolverConfig `yaml:"resolver" validate:"required"`
+	Network  NetworkConfig  `yaml:"network"`
 }
 
 // NetworkConfig is the interface devices reach this machine on.
@@ -42,9 +44,9 @@ type NetworkConfig struct {
 }
 
 func defaults() Config {
-	return Config{
-		FFmpeg:   FFmpegConfig{Path: "ffmpeg", ProbePath: "ffprobe"},
-		Resolver: ResolverConfig{Config: rank.Config{ProbeMaxConcurrency: 2}},
-		Server:   ServerConfig{Listen: ":8410"},
-	}
+	c := Config{}
+	c.Servers.Media.FFmpeg = FFmpegConfig{Path: "ffmpeg", ProbePath: "ffprobe"}
+	c.Servers.Media.Listen = ":8410"
+	c.Servers.Media.Resolver = ResolverConfig{ProbeMaxConcurrency: 2}
+	return c
 }

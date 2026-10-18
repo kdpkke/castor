@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	mediav1 "github.com/stupside/castor/gen/castor/media/v1"
 	"github.com/stupside/castor/services/apiserver/internal/device"
@@ -37,7 +38,7 @@ func TestTheChannelIsLaunchedWithTheFormatOfWhatItPlays(t *testing.T) {
 		mediav1.Container_CONTAINER_MKV: "mkv",
 		mediav1.Container_CONTAINER_HLS: "hls",
 	} {
-		if err := dev.Play(t.Context(), stream, container); err != nil {
+		if err := dev.Play(t.Context(), stream, container, nil); err != nil {
 			t.Fatal(err)
 		}
 		if got := <-launched; got.Get("format") != want || got.Get("url") != stream.String() {
@@ -49,7 +50,7 @@ func TestTheChannelIsLaunchedWithTheFormatOfWhatItPlays(t *testing.T) {
 func TestUnsupportedContainersDoNotLaunchTheRokuChannel(t *testing.T) {
 	// No client is needed: an unsupported container must fail before ECP.
 	dev := &session{}
-	if err := dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test"}, mediav1.Container_CONTAINER_MPEGTS); err == nil {
+	if err := dev.Play(t.Context(), &url.URL{Scheme: "http", Host: "media.test"}, mediav1.Container_CONTAINER_MPEGTS, nil); err == nil {
 		t.Error("Play accepted unsupported MPEG-TS container")
 	}
 }
@@ -158,5 +159,50 @@ func TestRokuStopLeavesForHome(t *testing.T) {
 	ecp := &scriptedECP{states: []string{"play"}}
 	if err := scriptedSession(ecp).Stop(t.Context()); err != nil || len(ecp.keys) != 1 || ecp.keys[0] != "Home" {
 		t.Errorf("Stop = %v with keys %v, want Home", err, ecp.keys)
+	}
+}
+
+func TestRokuStartupHasDeadline(t *testing.T) {
+	for _, state := range []string{"none", "startup", "buffer"} {
+		t.Run(state, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ecp := &scriptedECP{states: []string{state}}
+				start := time.Now()
+				err := scriptedSession(ecp).AwaitEnd(t.Context())
+				if _, ok := errors.AsType[*device.PlaybackError](err); !ok {
+					t.Fatalf("AwaitEnd=%v", err)
+				}
+				if time.Since(start) > startupTimeout+device.PollInterval {
+					t.Fatal("startup exceeded deadline")
+				}
+			})
+		})
+	}
+}
+
+type decoderErrorECP struct{}
+
+func (decoderErrorECP) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`<player error="true" state="stop"><error-code>42</error-code><error-message>unsupported stream</error-message></player>`))}, nil
+}
+func TestRokuDecoderErrorIsTerminal(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dev := &session{ecp: &url.URL{Scheme: "http", Host: "roku.test"}, hc: &http.Client{Transport: decoderErrorECP{}}}
+		start := time.Now()
+		err := dev.AwaitEnd(t.Context())
+		if err == nil || !strings.Contains(err.Error(), "unsupported stream") || !strings.Contains(err.Error(), "42") {
+			t.Fatalf("AwaitEnd=%v", err)
+		}
+		if time.Since(start) != device.PollInterval {
+			t.Fatal("decoder refusal retried as network failure")
+		}
+	})
+}
+
+func TestHLSDoesNotImplyProgressiveWebVTT(t *testing.T) {
+	for _, f := range (&session{}).Capabilities().Formats {
+		if f.GetHls().GetSubtitles() == mediav1.HLSSupport_SUBTITLES_WEBVTT {
+			t.Fatal("unverified subtitle rendition support")
+		}
 	}
 }

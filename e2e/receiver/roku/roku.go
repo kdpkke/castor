@@ -74,6 +74,7 @@ func (d *device) refused() bool {
 }
 
 func (d *device) Start(t *testing.T, s *receiver.Session) (receiver.Endpoint, error) {
+	s.PlayInRealtime()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /query/apps", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/xml")
@@ -104,7 +105,12 @@ func (d *device) Start(t *testing.T, s *receiver.Session) (receiver.Endpoint, er
 	})
 	// ECP has one Play key, which the channel toggles on.
 	mux.HandleFunc("POST /keypress/{key}", func(w http.ResponseWriter, req *http.Request) {
-		if key := req.PathValue("key"); key != "Play" {
+		switch key := req.PathValue("key"); key {
+		case "Home":
+			s.Stop()
+			return
+		case "Play":
+		default:
 			s.Problem("keypress %s, want Play", key)
 			return
 		}

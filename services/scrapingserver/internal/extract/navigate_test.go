@@ -30,9 +30,9 @@ func TestOnlyAFrameOnTheWebIsOpened(t *testing.T) {
 }
 
 func TestVisibleIframeNavigationWaitsForItsDocumentAndPreservesReferrer(t *testing.T) {
-	chrome := os.Getenv("CASTOR_TEST_CHROME")
+	chrome := os.Getenv("TEST_CASTOR_CHROME")
 	if chrome == "" {
-		t.Skip("set CASTOR_TEST_CHROME to exercise real browser navigation")
+		t.Skip("set TEST_CASTOR_CHROME to exercise real browser navigation")
 	}
 	requests := make(chan string, 8)
 	ts := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,5 +106,31 @@ func TestVisibleIframeNavigationWaitsForItsDocumentAndPreservesReferrer(t *testi
 		case <-ctx.Done():
 			t.Fatal("frame request missing")
 		}
+	}
+}
+
+func TestOffscreenLazyIframeIsDiscovered(t *testing.T) {
+	chrome := os.Getenv("TEST_CASTOR_CHROME")
+	if chrome == "" {
+		t.Skip("set TEST_CASTOR_CHROME to exercise real browser navigation")
+	}
+	ts := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<iframe loading="lazy" src="/child" style="position:absolute;top:10000px;width:640px;height:360px"></iframe>`)
+	}))
+	ts.Start()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	s, err := newSession(ctx, BrowserConfig{ChromePath: chrome, Headless: true, Timeout: 10 * time.Second}, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var src string
+	if err := chromedp.Run(s.ctx, chromedp.Evaluate(iframeSrcJS, &src)); err != nil {
+		t.Fatal(err)
+	}
+	if src != ts.URL+"/child" {
+		t.Fatalf("offscreen frame=%q", src)
 	}
 }

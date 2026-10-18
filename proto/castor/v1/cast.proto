@@ -85,15 +85,29 @@ message Preferences {
   optional uint32 max_height = 2 [(buf.validate.field).uint32.gte = 2];
   // Absent subtitles inherit the server's default; an explicit mode replaces it.
   SubtitleSelection subtitles = 3;
+  // Ordered audio languages to try before the source's default track; absent takes the server's default.
+  AudioSelection audio = 4;
+}
+
+message AudioSelection {
+  repeated string languages = 1 [(buf.validate.field).repeated.items.string.pattern = "^[a-z]{2,3}$"];
 }
 
 message SubtitleSelection {
   oneof mode {
     option (buf.validate.oneof).required = true;
     google.protobuf.Empty disabled = 1;
-    google.protobuf.Empty auto_detect = 2;
-    string language = 3 [(buf.validate.field).string.pattern = "^[a-z]{2,3}$"];
+    SubtitlePreferences preferences = 2;
   }
+}
+
+message SubtitlePreferences {
+  repeated string languages = 1 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.items.string.pattern = "^[a-z]{2,3}$"
+  ];
+  // Generate captions with Whisper if the source has no usable caption in the selected language.
+  bool transcribe_if_missing = 2;
 }
 
 message WatchRequest {

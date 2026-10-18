@@ -46,11 +46,11 @@
     <string name="height_invalid">Inserisci un numero intero di almeno 2.</string>
     <string name="subtitles">Sottotitoli</string>
     <string name="subtitles_off">Disattivati</string>
-    <string name="subtitles_auto">Automatici</string>
+    <string name="subtitles_auto">Lingua app</string>
     <string name="subtitles_language">Lingua</string>
     <string name="language_code">Codice lingua, ad esempio it o en</string>
     <string name="language_invalid">Usa un codice lingua di due o tre lettere.</string>
-    <string name="subtitles_help">I sottotitoli vocali scaricano un modello al primo uso e possono consumare molta batteria. Richiedono riproduzione servita, ad esempio DLNA.</string>
+    <string name="subtitles_help">Castor usa i sottotitoli del flusso nella lingua scelta, oppure li genera scaricando un modello vocale. Lingua app segue inglese o italiano. La trascrizione può consumare molta batteria e richiede riproduzione servita, ad esempio DLNA.</string>
     <string name="preferences_summary">%1$s · %2$s</string>
     <string name="done">Fatto</string>
     <string name="cast_video">Trasmetti sulla TV</string>

@@ -52,7 +52,14 @@ func TestAPlayTimeoutNeedsConfirmationOfTheRequestedStream(t *testing.T) {
 				var actions []string
 				client := soap.NewSOAPClient(url.URL{Scheme: "http", Host: "192.0.2.10", Path: "/control"})
 				client.HTTPClient.Transport = actionTransport(func(r *http.Request) (*http.Response, error) {
-					action := strings.Split(strings.Trim(r.Header["SOAPACTION"][0], `"`), "#")[1]
+					// A fake transport sees goupnp's headers before net/http canonicalizes them.
+					var soapAction string
+					for name, values := range r.Header {
+						if strings.EqualFold(name, "SOAPAction") && len(values) > 0 {
+							soapAction = values[0]
+						}
+					}
+					action := strings.Split(strings.Trim(soapAction, `"`), "#")[1]
 					actions = append(actions, action)
 					if action == "Play" && tt.play == "timeout" || action == tt.query {
 						if tt.cancelAt == action {
@@ -86,7 +93,7 @@ func TestAPlayTimeoutNeedsConfirmationOfTheRequestedStream(t *testing.T) {
 				}, sinks: sinks}
 				u, _ := url.Parse(target)
 				started := time.Now()
-				err := s.Play(ctx, u, mediav1.Container_CONTAINER_MPEGTS)
+				err := s.Play(ctx, u, mediav1.Container_CONTAINER_MPEGTS, nil)
 				if (err == nil) != tt.want {
 					t.Fatalf("Play() = %v, want success %v; actions %v", err, tt.want, actions)
 				}

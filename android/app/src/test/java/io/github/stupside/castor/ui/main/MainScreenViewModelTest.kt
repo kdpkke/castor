@@ -84,8 +84,13 @@ class MainScreenViewModelTest {
         .preferences
         .subtitles
     assertTrue(selection("off").hasDisabled())
-    assertTrue(selection("auto").hasAutoDetect())
-    assertEquals("it", selection("it").language)
+    assertEquals(listOf("en"), selection("auto").preferences.languagesList)
+    assertEquals(listOf("it"), selection("it").preferences.languagesList)
+    assertTrue(selection("it").preferences.transcribeIfMissing)
+    val italian =
+      MainScreenViewModel.request("https://example.org/watch", true, target, "720", "auto", "it")
+    assertEquals(listOf("it"), italian.preferences.subtitles.preferences.languagesList)
+    assertTrue(italian.preferences.subtitles.preferences.transcribeIfMissing)
     assertThrows(IllegalArgumentException::class.java) { selection("italian") }
   }
 }

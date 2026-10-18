@@ -183,6 +183,7 @@ fun MainScreen(
                       height,
                       subtitles,
                       receiverName = it.name,
+                      subtitleLanguage = options.language().tag,
                     )
                   }
                 },
